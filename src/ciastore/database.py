@@ -26,8 +26,9 @@ class Database(dict[str, Any]):
 
     def write_file(self) -> None:
         """Write database file"""
-        if not path.exists(path.dirname(self.file)):
-            makedirs(self.file, exist_ok=True)
+        folder = path.dirname(self.file)
+        if not path.exists(folder):
+            makedirs(folder, exist_ok=True)
         with open(self.file, "w", encoding="utf-8") as file:
             json.dump(self, file)
 

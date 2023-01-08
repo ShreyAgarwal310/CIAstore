@@ -11,7 +11,7 @@ __version__ = "0.0.0"
 
 
 from typing import Final
-from os import path, getenv
+from os import path, getenv, makedirs
 import sys
 import socket
 from pathlib import Path
@@ -51,8 +51,11 @@ def log(message: str, level: int = 0, log_dir: str | None = None) -> None:
     levels = ["INFO", "ERROR"]
 
     if log_dir is None:
-        log_dir = path.dirname(__file__)
-    log_file = path.join(log_dir, "log.txt")
+        log_dir = path.join(path.dirname(__file__), 'logs')
+    if not path.exists(log_dir):
+        makedirs(log_dir, exist_ok=True)
+    filename = time.strftime('log_%Y_%m_%d.log')
+    log_file = path.join(log_dir, filename)
 
     log_level = levels[min(max(0, level), len(levels) - 1)]
     log_time = time.asctime()
@@ -63,8 +66,8 @@ def log(message: str, level: int = 0, log_dir: str | None = None) -> None:
     if not path.exists(log_file):
         with open(log_file, mode="w", encoding="utf-8") as file:
             file.close()
-        log("Log file does not exist!", 1)
-        log("Created log file")
+##        log("Log file does not exist!", 1)
+##        log("Created log file")
     with open(log_file, mode="a", encoding="utf-8") as file:
         file.write(f"{log_msg}\n")
         file.close()
@@ -296,7 +299,7 @@ async def run_async(
         config = {
             "bind": [location],
             "worker_class": "trio",
-            "errorlog": path.join(root_dir, "log.txt"),
+            "errorlog": path.join(root_dir, "logs", time.strftime('log_%Y_%m_%d.log')),
         }
         if DOMAIN:
             config["certfile"] = "/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
