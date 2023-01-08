@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Matrix</title>
+		<style>
+			body {
+				background-color: black;
+				margin: 0;
+			}
+		</style>
+		<script type="text/javascript">
+			function matrix(){
+				const app = document.getElementById("app");
+				let previousTimeStamp;
+
+				app.width = window.screen.width;
+				app.height = window.screen.height;
+				const canvas = app.getContext('2d');
+				const count = Math.ceil(app.width / 10);
+				const y = []
+				for(var i=0; i<count; i++){
+					y[i] = 0;
+				}
+				function step(timestamp) {
+					if (previousTimeStamp === undefined) {
+						previousTimeStamp = timestamp;
+					}
+					const elapsed = timestamp - previousTimeStamp;
+
+					if (elapsed >= 27) {
+						previousTimeStamp = timestamp;
+
+						// Fill canvas with nearly transparent black,
+						// each re-fill makes everything drawn before
+						// slightly darker creating a fade effect
+						canvas.fillStyle = 'rgba(0, 0, 0, 0.05)'
+						canvas.fillRect(0, 0, app.width, app.height);
+
+						// Fill with red
+						canvas.fillStyle = '#F00';
+						// For each character
+						for (var i=0; i<y.length; i++){
+							// Draw random chinese character
+							canvas.fillText(String.fromCharCode(30000+Math.random()*33), i*10, y[i]);
+							// If offscreen give or take a bit, reset
+							if (y[i] > app.height + Math.random()*10000){
+								y[i] = 0;
+							} else { // Otherwise move down by 10
+								y[i] += 10;
+							}
+						}
+					}
+					window.requestAnimationFrame(step);
+				}
+				window.requestAnimationFrame(step);
+			}
+		</script>
+	</head>
+	<body onload="matrix()">
+		<canvas id="app"></canvas>
+	</body>
+</html>
