@@ -91,7 +91,12 @@ def radio_select_dict(
     count = 0
     for display, value in options.items():
         cid = f"{submit_name}_{count}"
-        args = {"type": "radio", "id": cid, "name": submit_name, "value": value}
+        args = {
+            "type": "radio",
+            "id": cid,
+            "name": submit_name,
+            "value": value,
+        }
         if value == default:
             args["checked"] = "checked"
         lines.append(get_tag("input", args))
@@ -140,7 +145,10 @@ def get_list(values: list[str]) -> str:
 
 
 def get_form(
-    form_id: str, contents: str, submit_display: str, form_title: str | None = None
+    form_id: str,
+    contents: str,
+    submit_display: str,
+    form_title: str | None = None,
 ) -> str:
     """Return HTML form"""
     submit = get_tag("input", {"type": "submit", "value": submit_display})
@@ -150,7 +158,8 @@ def get_form(
     title = ""
     if form_title is not None:
         title = f"<b>{form_title}</b>\n"
-    return title + wrap_tag("form", html, True, {"name": form_id, "method": "post"})
+    args = {"name": form_id, "method": "post"}
+    return title + wrap_tag("form", html, True, args)
 
 
 def create_link(reference: str, display: str) -> str:

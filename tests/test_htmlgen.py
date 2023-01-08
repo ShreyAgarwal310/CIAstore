@@ -1,4 +1,5 @@
 import pytest
+
 from ciastore import htmlgen
 
 
@@ -63,6 +64,10 @@ def test_get_tag(type_: str, args: dict[str, str] | None, expect: str) -> None:
     ],
 )
 def test_wrap_tag(
-    type_: str, value: str, block: bool, args: dict[str, str] | None, expect: str
+    type_: str,
+    value: str,
+    block: bool,
+    args: dict[str, str] | None,
+    expect: str,
 ) -> None:
     assert htmlgen.wrap_tag(type_, value, block, args) == expect

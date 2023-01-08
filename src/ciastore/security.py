@@ -1,14 +1,13 @@
 "Security functions like hashing passwords"
 
-from typing import Callable, TypeVar, Any, Awaitable
-import hashlib
 import base64
+import hashlib
 import secrets
-from functools import wraps
 import time
+from functools import wraps
+from typing import Callable, TypeVar
 
 import trio
-
 
 _NEWEST_HASH: str = ""
 _HASH_FUNCTIONS: dict[str, Callable[[str], str]] = {}
@@ -43,7 +42,8 @@ def get_hash(hash_name: str, value: str) -> str:
     """Get hash of value using hash name function"""
     if hash_name not in _HASH_FUNCTIONS:
         raise ValueError(
-            f'No function named "{hash_name}" has ' "the @hash_function decorator"
+            f'No function named "{hash_name}" has '
+            + "the @hash_function decorator"
         )
     return _HASH_FUNCTIONS[hash_name](value)
 
@@ -55,7 +55,9 @@ def sha3_256(bytes_: bytes) -> bytes:
     return hash_obj.digest()
 
 
-def hash_login(password: str, salt: str, hash_func_name: str, pepper: str) -> str:
+def hash_login(
+    password: str, salt: str, hash_func_name: str, pepper: str
+) -> str:
     """Return hash of login information"""
     hash_ = get_hash(hash_func_name, f"{pepper}{salt}{password}")
 
@@ -96,16 +98,22 @@ def compare_hash_time_attackable(
     the instant the two characters don't match, so by carefully
     timing the response, attackers could figure out the password
     character by character"""
-    recorded, new_hash = get_password_hash_for_compare(password, database_value, pepper)
+    recorded, new_hash = get_password_hash_for_compare(
+        password, database_value, pepper
+    )
     return recorded == new_hash
 
 
-async def compare_hash(password: str, database_value: str, pepper: str) -> bool:
+async def compare_hash(
+    password: str, database_value: str, pepper: str
+) -> bool:
     """Compare password and database value in a constant amount of time"""
     # 1 millisecond is 1e+6 nanoseconds
     target = 2e6  # Probably fine given ~136403ns test, order of magnitude up
     start = time.perf_counter_ns()
-    recorded, new_hash = get_password_hash_for_compare(password, database_value, pepper)
+    recorded, new_hash = get_password_hash_for_compare(
+        password, database_value, pepper
+    )
     is_equal = recorded == new_hash
     end = time.perf_counter_ns()
     # Sleep for at least target nanoseconds (divide by 1e+9 -> seconds)
@@ -114,21 +122,21 @@ async def compare_hash(password: str, database_value: str, pepper: str) -> bool:
     return is_equal
 
 
-##def time_function(
-##    function: Callable[..., T], *args: Any, **kwargs: Any
-##) -> tuple[T, int]:
-##    """Time function execution"""
-##    start = time.perf_counter_ns()
-##    value = function(*args, **kwargs)
-##    end = time.perf_counter_ns()
-##    return value, end - start
-##
-##
-##async def time_function_async(
-##    function: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any
-##) -> tuple[T, int]:
-##    """Time asynchronous function execution"""
-##    start = time.perf_counter_ns()
-##    value = await function(*args, **kwargs)
-##    end = time.perf_counter_ns()
-##    return value, end - start
+# def time_function(
+#     function: Callable[..., T], *args: Any, **kwargs: Any
+# ) -> tuple[T, int]:
+#     """Time function execution"""
+#     start = time.perf_counter_ns()
+#     value = function(*args, **kwargs)
+#     end = time.perf_counter_ns()
+#     return value, end - start
+
+
+# async def time_function_async(
+#     function: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any
+# ) -> tuple[T, int]:
+#     """Time asynchronous function execution"""
+#     start = time.perf_counter_ns()
+#     value = await function(*args, **kwargs)
+#     end = time.perf_counter_ns()
+#     return value, end - start

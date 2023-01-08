@@ -1,5 +1,5 @@
 import pytest
-from ciastore import server
 
+from ciastore import server
 
 # TODO

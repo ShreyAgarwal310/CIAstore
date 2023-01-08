@@ -1,7 +1,7 @@
-import pytest
-import secrets
 import random
+import secrets
 
+import pytest
 import trio
 
 from ciastore import security
@@ -38,18 +38,26 @@ def test_get_hash_bad_funcname() -> None:
 
 
 def test_sha3_256() -> None:
-    assert security.sha3_256("cat") == "1hZgfT5LqWp08yPP/F8go8eOfKuOy9uwOxP6j/yb9kQ="
+    assert (
+        security.sha3_256("cat")
+        == "1hZgfT5LqWp08yPP/F8go8eOfKuOy9uwOxP6j/yb9kQ="
+    )
 
 
 def test_hash_login_sha3_256() -> None:
     assert (
-        security.hash_login("cat", "this is salt", "sha3_256", "this is pepper")
+        security.hash_login(
+            "cat", "this is salt", "sha3_256", "this is pepper"
+        )
         == "sha3_256$this is salt$9QXdX8O+oqnQIXWshz251oGOQftoVrfVhfH99F+61C8="
     )
 
 
 def test_generate_salt() -> None:
-    assert security.generate_salt() == "uX9p917fNccf2tNwZurpHRT26gFFazQXcLg16UL1SfE"
+    assert (
+        security.generate_salt()
+        == "uX9p917fNccf2tNwZurpHRT26gFFazQXcLg16UL1SfE"
+    )
 
 
 def test_create_new_login_credentials() -> None:
@@ -61,7 +69,9 @@ def test_create_new_login_credentials() -> None:
 
 def test_get_password_hash_for_compare_bad_funcname() -> None:
     with pytest.raises(ValueError):
-        security.get_password_hash_for_compare("fish", "fish_64$salt$seven", "peppers")
+        security.get_password_hash_for_compare(
+            "fish", "fish_64$salt$seven", "peppers"
+        )
 
 
 def test_get_password_hash_for_compare_diff_pepper() -> None:
@@ -121,18 +131,18 @@ def test_compare_hash_time_attackable_correct() -> None:
     )
 
 
-def test_compare_hash_correct() -> None:
-    assert trio.run(
-        security.compare_hash,
+@pytest.mark.trio
+async def test_compare_hash_correct() -> None:
+    assert await security.compare_hash(
         "totatoe",
         "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$eA5A53S/Kl11r7a9Q9YzjBVUDuh4i4Nn0cNl282+Xts=",
         "peppers",
     )
 
 
-def test_compare_hash_wrong() -> None:
-    assert not trio.run(
-        security.compare_hash,
+@pytest.mark.trio
+async def test_compare_hash_wrong() -> None:
+    assert not await security.compare_hash(
         "hacks password",
         "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$eA5A53S/Kl11r7a9Q9YzjBVUDuh4i4Nn0cNl282+Xts=",
         "peppers",

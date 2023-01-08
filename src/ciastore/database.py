@@ -1,8 +1,10 @@
-from typing import Any, Callable, Optional
-from os import path, makedirs
+"""Database - Read and write json files"""
+
+
 import json
 import weakref
-
+from os import makedirs, path
+from typing import Any, Callable, Optional
 
 _LOADED: dict[str, "Database"] = {}
 
@@ -35,10 +37,10 @@ class Database(dict[str, Any]):
 
 def __database_ref_dead(
     file_path: str,
-) -> Callable[Optional["weakref.CallableProxyType[Database]"], None]:
+) -> Callable[[Optional["weakref.CallableProxyType[Database]"]], None]:
     """Properly unload dead reference"""
 
-    def ref_dead(dead_ref: Optional["weakref.CallableProxyType[Database]"]) -> None:
+    def ref_dead(_: Optional["weakref.CallableProxyType[Database]"]) -> None:
         unload(file_path)
 
     return ref_dead
@@ -47,7 +49,7 @@ def __database_ref_dead(
 def load(file_path: str) -> Database:
     """Load database from file path or return already loaded instance"""
     file = path.abspath(file_path)
-    if not file in _LOADED:
+    if file not in _LOADED:
         _LOADED[file] = Database(file)
     return weakref.proxy(_LOADED[file], __database_ref_dead(file))
 

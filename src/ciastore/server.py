@@ -10,36 +10,34 @@ __author__ = "CSHS Members"
 __version__ = "0.0.0"
 
 
-from typing import Final
-from os import path, getenv, makedirs
-import sys
-import socket
-from pathlib import Path
-from urllib.parse import urlencode
-import time
 import json
-from functools import partial
+import socket
+import sys
+import time
 import uuid
+from functools import partial
+from os import getenv, makedirs, path
+from pathlib import Path
+from typing import Final
+from urllib.parse import urlencode
 
 import trio
 from dotenv import load_dotenv
 from hypercorn.config import Config
 from hypercorn.trio import serve
-from quart_trio import QuartTrio
-from quart import request, Response, render_template_string
+from quart import render_template_string, request
 from quart_auth import (
     AuthManager,
     AuthUser,
-    Action,
-    login_user,
-    logout_user,
     current_user,
     login_required,
+    login_user,
+    logout_user,
 )
+from quart_trio import QuartTrio
 from werkzeug import Response as wkresp
 
-from ciastore import htmlgen, security, database
-
+from ciastore import database, htmlgen, security
 
 load_dotenv()
 DOMAIN: Final = None
@@ -51,10 +49,10 @@ def log(message: str, level: int = 0, log_dir: str | None = None) -> None:
     levels = ["INFO", "ERROR"]
 
     if log_dir is None:
-        log_dir = path.join(path.dirname(__file__), 'logs')
+        log_dir = path.join(path.dirname(__file__), "logs")
     if not path.exists(log_dir):
         makedirs(log_dir, exist_ok=True)
-    filename = time.strftime('log_%Y_%m_%d.log')
+    filename = time.strftime("log_%Y_%m_%d.log")
     log_file = path.join(log_dir, filename)
 
     log_level = levels[min(max(0, level), len(levels) - 1)]
@@ -66,8 +64,8 @@ def log(message: str, level: int = 0, log_dir: str | None = None) -> None:
     if not path.exists(log_file):
         with open(log_file, mode="w", encoding="utf-8") as file:
             file.close()
-##        log("Log file does not exist!", 1)
-##        log("Created log file")
+    ##        log("Log file does not exist!", 1)
+    ##        log("Created log file")
     with open(log_file, mode="a", encoding="utf-8") as file:
         file.write(f"{log_msg}\n")
         file.close()
@@ -96,22 +94,17 @@ def find_ip() -> str:
     return candidates[0]
 
 
-##class User(AuthUser):
-##    def __init__(self, auth_id: str | None) -> None:
-##        super().__init__(auth_id)
-##        self.action = Action.WRITE
-
 app: Final = QuartTrio(__name__)
 AuthManager(app)
 
 
-##@app.get('/')
-##async def root_GET() -> str:
-##    "Main page GET request"
-##    msg = "If you're reading this, the web server was installed correctly.™"
-##    value = htmlgen.wrap_tag('i', msg, False)
-##    html = htmlgen.contain_in_box('', value)
-##    return htmlgen.get_template('CompanyName.website', html)
+# @app.get('/')
+# async def root_get() -> str:
+#     "Main page GET request"
+#     msg = "If you're reading this, the web server was installed correctly.™"
+#     value = htmlgen.wrap_tag('i', msg, False)
+#     html = htmlgen.contain_in_box('', value)
+#     return htmlgen.get_template('CompanyName.website', html)
 
 
 class Student(AuthUser):
@@ -120,6 +113,7 @@ class Student(AuthUser):
     __slots__ = ("data",)
 
     def __init__(self, data: dict[str, str]) -> None:
+        super().__init__(data["username"])
         self.data = data
 
     def __repr__(self) -> str:
@@ -127,6 +121,7 @@ class Student(AuthUser):
 
 
 async def convert_joining(code: str) -> wkresp:
+    """Convert joining record to student record"""
     students = database.load(app.root_path / "records" / "students.json")
     joining = database.load(app.root_path / "records" / "joining.json")
 
@@ -135,7 +130,10 @@ async def convert_joining(code: str) -> wkresp:
     del joining[code]
     joining.write_file()
 
-    students[user["username"]] = {"password": user["password"], "email": user["email"]}
+    students[user["username"]] = {
+        "password": user["password"],
+        "email": user["email"],
+    }
     students.write_file()
 
     user = AuthUser(user["username"])
@@ -145,7 +143,8 @@ async def convert_joining(code: str) -> wkresp:
 
 
 @app.get("/signup")
-async def signup_GET() -> str | wkresp:
+async def signup_get() -> str | wkresp:
+    """Handle sign up get including code register"""
     code = request.args.get("code", None)
     if code is not None:
         joining = database.load(app.root_path / "records" / "joining.json")
@@ -154,7 +153,9 @@ async def signup_GET() -> str | wkresp:
 
     fields = []
     fields.append(htmlgen.field_select("username", "Username:"))
-    fields.append(htmlgen.field_select("password", "Password:", field_type="password"))
+    fields.append(
+        htmlgen.field_select("password", "Password:", field_type="password")
+    )
     contents = "<br>\n".join(fields)
     form = htmlgen.get_form("signup", contents, "Sign up", "Sign up")
     body = htmlgen.contain_in_box(form)
@@ -162,7 +163,8 @@ async def signup_GET() -> str | wkresp:
 
 
 @app.post("/signup")
-async def signup_POST() -> wkresp:
+async def signup_post() -> wkresp:
+    """Handle sign up form"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
 
@@ -187,7 +189,11 @@ async def signup_POST() -> wkresp:
     email = f"{username}@class.lps.org"
     while (code := str(uuid.uuid4())) in joining:
         continue
-    link = app.url_for("signup_GET", _external=True) + "?" + urlencode({"code": code})
+    link = (
+        app.url_for("signup_get", _external=True)
+        + "?"
+        + urlencode({"code": code})
+    )
     print(f"{link = }")
     # TODO: Message email code
 
@@ -204,10 +210,13 @@ async def signup_POST() -> wkresp:
 
 
 @app.get("/login")
-async def login_GET() -> str:
+async def login_get() -> str:
+    """Get login page"""
     fields = []
     fields.append(htmlgen.field_select("username", "Username:"))
-    fields.append(htmlgen.field_select("password", "Password:", field_type="password"))
+    fields.append(
+        htmlgen.field_select("password", "Password:", field_type="password")
+    )
     contents = "<br>\n".join(fields)
 
     form = htmlgen.get_form("login", contents, "Sign In", "Login")
@@ -220,7 +229,8 @@ async def login_GET() -> str:
 
 
 @app.post("/login")
-async def login_POST() -> wkresp:
+async def login_post() -> wkresp:
+    """Handle login form"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
 
@@ -251,6 +261,7 @@ async def login_POST() -> wkresp:
 
 @app.get("/logout")
 async def logout() -> wkresp:
+    """Handle logout"""
     if current_user.is_authenticated:
         log(f"User {current_user.auth_id!r} logged out")
     logout_user()
@@ -260,6 +271,7 @@ async def logout() -> wkresp:
 @app.get("/restricted")
 @login_required
 async def restricted_route() -> str:
+    """Dump user data"""
     students = database.load(app.root_path / "records" / "students.json")
     if not current_user.auth_id in students:
         return app.redirect("/logout")
@@ -267,18 +279,20 @@ async def restricted_route() -> str:
     return json.dumps(student)
 
 
-##@app.get("/hello")
-##async def hello() -> str:
-##    print(current_user.auth_id)
-##    return await render_template_string(
-##        """
-##    {% if current_user.is_authenticated %}
-##      Hello logged in user
-##    {% else %}
-##      Hello logged out user
-##    {% endif %}
-##    """
-##    )
+@app.get("/isauth")
+async def isauth() -> str:
+    """Tell user if they are authenticated"""
+    template = await render_template_string(
+        """
+    {% if current_user.is_authenticated %}
+      Hello logged in user { current_user.auth_id }
+    {% else %}
+      Hello logged out user
+    {% endif %}
+    """
+    )
+    body = htmlgen.contain_in_box(template)
+    return htmlgen.get_template("Authenticated", body)
 
 
 async def run_async(
@@ -299,7 +313,9 @@ async def run_async(
         config = {
             "bind": [location],
             "worker_class": "trio",
-            "errorlog": path.join(root_dir, "logs", time.strftime('log_%Y_%m_%d.log')),
+            "errorlog": path.join(
+                root_dir, "logs", time.strftime("log_%Y_%m_%d.log")
+            ),
         }
         if DOMAIN:
             config["certfile"] = "/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
@@ -311,7 +327,10 @@ async def run_async(
         app.static_folder = Path(root_dir, "static")
 
         app.add_url_rule(
-            "/", "static", app.send_static_file, defaults={"filename": "index.html"}
+            "/",
+            "static",
+            app.send_static_file,
+            defaults={"filename": "index.html"},
         )
         app.add_url_rule("/<path:filename>", "static", app.send_static_file)
         app.secret_key = cookie_secret
