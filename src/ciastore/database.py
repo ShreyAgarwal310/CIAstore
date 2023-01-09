@@ -2,9 +2,9 @@
 
 
 import json
-import weakref
 from os import makedirs, path
-from typing import Any, Callable, Optional
+from pathlib import Path
+from typing import Any
 
 _LOADED: dict[str, "Database"] = {}
 
@@ -14,7 +14,7 @@ class Database(dict[str, Any]):
 
     __slots__ = ("file", "__weakref__")
 
-    def __init__(self, file_path: str) -> None:
+    def __init__(self, file_path: str | Path) -> None:
         super().__init__()
         self.file = file_path
 
@@ -35,23 +35,12 @@ class Database(dict[str, Any]):
             json.dump(self, file)
 
 
-def __database_ref_dead(
-    file_path: str,
-) -> Callable[[Optional["weakref.CallableProxyType[Database]"]], None]:
-    """Properly unload dead reference"""
-
-    def ref_dead(_: Optional["weakref.CallableProxyType[Database]"]) -> None:
-        unload(file_path)
-
-    return ref_dead
-
-
-def load(file_path: str) -> Database:
+def load(file_path: str | Path) -> Database:
     """Load database from file path or return already loaded instance"""
     file = path.abspath(file_path)
     if file not in _LOADED:
         _LOADED[file] = Database(file)
-    return weakref.proxy(_LOADED[file], __database_ref_dead(file))
+    return _LOADED[file]
 
 
 def get_loaded() -> set[str]:
@@ -59,7 +48,7 @@ def get_loaded() -> set[str]:
     return set(_LOADED)
 
 
-def unload(file_path: str) -> None:
+def unload(file_path: str | Path) -> None:
     """If database loaded, write file and unload"""
     file = path.abspath(file_path)
     if file not in get_loaded():
