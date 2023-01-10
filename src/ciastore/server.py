@@ -25,22 +25,16 @@ import trio
 from dotenv import load_dotenv
 from hypercorn.config import Config
 from hypercorn.trio import serve
-from quart import render_template_string, request
-from quart_auth import (
-    AuthManager,
-    AuthUser,
-    current_user,
-    login_required,
-    login_user,
-    logout_user,
-)
+from quart import request
+from quart_auth import (AuthManager, AuthUser, current_user, login_required,
+                        login_user, logout_user)
 from quart_trio import QuartTrio
 from werkzeug import Response as wkresp
 
 from ciastore import database, htmlgen, security
 
 load_dotenv()
-DOMAIN: Final = None
+DOMAIN: str | None = None
 PEPPER: Final = getenv("COOKIE_SECRET", "")
 
 
@@ -64,8 +58,6 @@ def log(message: str, level: int = 0, log_dir: str | None = None) -> None:
     if not path.exists(log_file):
         with open(log_file, mode="w", encoding="utf-8") as file:
             file.close()
-    ##        log("Log file does not exist!", 1)
-    ##        log("Created log file")
     with open(log_file, mode="a", encoding="utf-8") as file:
         file.write(f"{log_msg}\n")
         file.close()
@@ -94,30 +86,62 @@ def find_ip() -> str:
     return candidates[0]
 
 
+def template(
+    title: str,
+    body: str,
+    *,
+    head: str = "",
+    body_tag: dict[str, htmlgen.TagArg] | None = None,
+    lang: str = "en",
+) -> str:
+    """HTML Template for application"""
+    head_data = "\n".join(
+        (
+            htmlgen.wrap_tag(
+                "style",
+                "\n".join(
+                    (
+                        htmlgen.css("*", font_family="Lucida Console"),
+                        htmlgen.css(("h1", "footer"), text_align="center"),
+                        htmlgen.css(
+                            "footer",
+                            position="absolute",
+                            bottom=0,
+                            width="100%",
+                        ),
+                    )
+                ),
+            ),
+            head,
+        )
+    )
+
+    body_data = "\n".join(
+        (
+            htmlgen.wrap_tag("h1", __title__, False),
+            htmlgen.wrap_tag("h2", title, False),
+            body,
+            htmlgen.wrap_tag(
+                "footer",
+                "\n".join(
+                    (
+                        htmlgen.tag("hr"),
+                        htmlgen.wrap_tag(
+                            "p", f"{__title__} v{__version__} © {__author__}"
+                        ),
+                    )
+                ),
+            ),
+        )
+    )
+
+    return htmlgen.template(
+        title, body_data, head=head_data, body_tag=body_tag
+    )
+
+
 app: Final = QuartTrio(__name__)
 AuthManager(app)
-
-
-# @app.get('/')
-# async def root_get() -> str:
-#     "Main page GET request"
-#     msg = "If you're reading this, the web server was installed correctly.™"
-#     value = htmlgen.wrap_tag('i', msg, False)
-#     html = htmlgen.contain_in_box('', value)
-#     return htmlgen.get_template('CompanyName.website', html)
-
-
-class Student(AuthUser):
-    """Student class"""
-
-    __slots__ = ("data",)
-
-    def __init__(self, data: dict[str, str]) -> None:
-        super().__init__(data["username"])
-        self.data = data
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.data!r})"
 
 
 async def convert_joining(code: str) -> wkresp:
@@ -152,18 +176,18 @@ async def signup_get() -> str | wkresp:
             return await convert_joining(code)
 
     fields = []
-    fields.append(htmlgen.field_select("username", "Username:"))
+    fields.append(htmlgen.input_field("username", "Username:"))
     fields.append(
-        htmlgen.field_select("password", "Password:", field_type="password")
+        htmlgen.input_field("password", "Password:", field_type="password")
     )
     contents = "<br>\n".join(fields)
-    form = htmlgen.get_form("signup", contents, "Sign up", "Sign up")
+    form = htmlgen.form("signup", contents, "Sign up", "Sign up")
     body = htmlgen.contain_in_box(form)
-    return htmlgen.get_template("Sign up", body)
+    return template("Sign up", body)
 
 
 @app.post("/signup")
-async def signup_post() -> wkresp:
+async def signup_post() -> wkresp | str:
     """Handle sign up form"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -187,45 +211,55 @@ async def signup_post() -> wkresp:
 
     # Email people
     email = f"{username}@class.lps.org"
-    while (code := str(uuid.uuid4())) in joining:
-        continue
-    link = (
-        app.url_for("signup_get", _external=True)
-        + "?"
-        + urlencode({"code": code})
+
+    # If not already in joining list, add and send code
+    if username not in joining:
+        while (code := str(uuid.uuid4())) in joining:
+            continue
+        link = (
+            app.url_for("signup_get", _external=True)
+            + "?"
+            + urlencode({"code": code})
+        )
+        print(f"{link = }")
+        # TODO: Message email code
+
+        joining[code] = {
+            "username": username,
+            "password": security.create_new_login_credentials(
+                password, PEPPER
+            ),
+            "email": email,
+        }
+        joining.write_file()
+
+    text = (
+        f"Sent an email to {email} containing "
+        + "your a link to verify your account."
     )
-    print(f"{link = }")
-    # TODO: Message email code
-
-    joining[code] = {
-        "username": username,
-        "password": security.create_new_login_credentials(password, PEPPER),
-        "email": email,
-    }
-    joining.write_file()
-
-    text = f"Sent an email to {email} containing your a link to verify your account."
     body = htmlgen.wrap_tag("p", text, False)
-    return htmlgen.get_template("Check your email", body)
+    return template("Check your email", body)
 
 
 @app.get("/login")
 async def login_get() -> str:
     """Get login page"""
     fields = []
-    fields.append(htmlgen.field_select("username", "Username:"))
+    fields.append(htmlgen.input_field("username", "Username:"))
     fields.append(
-        htmlgen.field_select("password", "Password:", field_type="password")
+        htmlgen.input_field("password", "Password:", field_type="password")
     )
     contents = "<br>\n".join(fields)
 
-    form = htmlgen.get_form("login", contents, "Sign In", "Login")
-    parts = []
-    parts.append(htmlgen.contain_in_box(form))
-    parts.append(htmlgen.create_link("/signup", "Don't have an account?"))
-    ##    parts.append(htmlgen.create_link('/forgot', "Forgot password?"))
-    body = "<br>\n".join(parts)
-    return htmlgen.get_template("Login", body)
+    form = htmlgen.form("login", contents, "Sign In", "Login")
+    body = "<br>\n".join(
+        (
+            htmlgen.contain_in_box(form),
+            htmlgen.create_link("/signup", "Don't have an account?"),
+            # htmlgen.create_link('/forgot', "Forgot password?"),
+        )
+    )
+    return template("Login", body)
 
 
 @app.post("/login")
@@ -244,7 +278,7 @@ async def login_post() -> wkresp:
     # Check Credentials here, e.g. username & password.
     students = database.load(app.root_path / "records" / "students.json")
 
-    if not username in students:
+    if username not in students:
         return app.redirect("/login#bad")
 
     database_value = students[username]["password"]
@@ -254,7 +288,7 @@ async def login_post() -> wkresp:
 
     user = AuthUser(username)
     login_user(user)
-    log(f"User {user!r} logged in")
+    log(f"User {username!r} logged in")
 
     return app.redirect("restricted")
 
@@ -270,29 +304,42 @@ async def logout() -> wkresp:
 
 @app.get("/restricted")
 @login_required
-async def restricted_route() -> str:
+async def restricted_route() -> wkresp | str:
     """Dump user data"""
+    assert current_user.auth_id is not None
     students = database.load(app.root_path / "records" / "students.json")
-    if not current_user.auth_id in students:
+    if current_user.auth_id not in students:
         return app.redirect("/logout")
     student = students[current_user.auth_id]
     return json.dumps(student)
 
 
-@app.get("/isauth")
-async def isauth() -> str:
-    """Tell user if they are authenticated"""
-    template = await render_template_string(
-        """
-    {% if current_user.is_authenticated %}
-      Hello logged in user { current_user.auth_id }
-    {% else %}
-      Hello logged out user
-    {% endif %}
-    """
+@app.get("/")
+async def root_get() -> str:
+    """Main page GET request"""
+    msg = "If you're reading this, the web server was installed correctly.™"
+    name = htmlgen.wrap_tag("i", msg, False)
+
+    if await current_user.is_authenticated:
+        status = f"Hello logged in user {current_user.auth_id}."
+    else:
+        login_url = app.url_for("login_get", _external=True)
+        login_link = htmlgen.create_link(login_url, "this link")
+        status = f"Please log in at {login_link}."
+    login_msg = htmlgen.wrap_tag("p", status)
+    body = "\n".join(
+        (
+            name,
+            htmlgen.contain_in_box(login_msg),
+        )
     )
-    body = htmlgen.contain_in_box(template)
-    return htmlgen.get_template("Authenticated", body)
+    return template("CompanyName.website", body)
+
+
+@app.get("/settings")
+async def settings_get() -> str:
+    """Settings page get request"""
+    return template("CompanyName.website", "")
 
 
 async def run_async(

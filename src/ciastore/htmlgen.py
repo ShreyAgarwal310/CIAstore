@@ -1,3 +1,9 @@
+"""HTML Generation - Generate HTML & CSS programatically"""
+
+
+from collections.abc import Generator, Iterable
+
+
 def indent(level: int, text: str) -> str:
     """Indent text by level of spaces."""
     prefix = " " * level
@@ -10,77 +16,147 @@ def deindent(level: int, text: str) -> str:
     return "\n".join(line.removeprefix(prefix) for line in text.splitlines())
 
 
-def get_tag(tag_type: str, args: dict[str, str] | None = None) -> str:
-    """Get HTML tag"""
-    tag_args = ""
-    if args is not None:
-        tag_args = " " + " ".join(f'{k}="{v}"' for k, v in args.items())
-    return f"<{tag_type}{tag_args}>"
+TagArg = str | int | float | bool
+
+
+def _quote_strings(values: Iterable[TagArg]) -> Generator[str, None, None]:
+    """Wrap string arguments with spaces in quotes"""
+    for value in values:
+        if isinstance(value, str) and " " in value:
+            yield f'"{value}"'
+            continue
+        yield f"{value}"
+
+
+def _process_properties(
+    properties: dict[str, TagArg | list[TagArg] | tuple[TagArg, ...]]
+) -> Generator[str, None, None]:
+    """Yield declarations"""
+    for key, values in properties.items():
+        property_ = key.removesuffix("_").replace("_", "-")
+        if isinstance(values, (list, tuple)):
+            wrap = values
+        else:
+            wrap = (values,)
+        value = " ".join(_quote_strings(wrap))
+        yield f"{property_}: {value}"
+
+
+def css_style(
+    **kwargs: TagArg | list[TagArg] | tuple[TagArg, ...]
+) -> list[str]:
+    """Return css style block"""
+    return [f"{prop};" for prop in _process_properties(kwargs)]
+
+
+def css(
+    selector: str | list[str] | tuple[str, ...],
+    /,
+    **kwargs: TagArg | list[TagArg] | tuple[TagArg, ...],
+) -> str:
+    """Return CSS block"""
+    if isinstance(selector, (list, tuple)):
+        selector = ", ".join(selector)
+    properties = indent(2, "\n".join(css_style(**kwargs)))
+    return f"{selector} {{\n{properties}\n}}"
+
+
+def _process_tag_args(args: dict[str, TagArg]) -> Generator[str, None, None]:
+    """Remove trailing underscores for arguments"""
+    for name, value in args.items():
+        key = name.removesuffix("_").replace("_", "-")
+        yield f'{key}="{value}"'
+
+
+def tag(type_: str, /, **kwargs: TagArg) -> str:
+    """Return HTML tag. Removes trailing underscore from argument names."""
+    args = ""
+    if kwargs:
+        args = " " + " ".join(_process_tag_args(kwargs))
+    return f"<{type_}{args}>"
 
 
 def wrap_tag(
-    tag_type: str,
+    type_: str,
     value: str,
-    is_block: bool = True,
-    tag_args: dict[str, str] | None = None,
+    /,
+    block: bool = True,
+    **kwargs: TagArg,
 ) -> str:
-    """Wrap value in HTML tag"""
-    if is_block:
+    """Wrap value in HTML tag.
+
+    If block, indent value"""
+    if block and value:
         value = f"\n{indent(2, value)}\n"
-    start_tag = get_tag(tag_type, tag_args)
-    return f"{start_tag}{value}</{tag_type}>"
+    start_tag = tag(type_, **kwargs)
+    return f"{start_tag}{value}</{type_}>"
 
 
-def get_template(page_name: str, body: str = "") -> str:
+def template(
+    title: str,
+    body: str,
+    *,
+    head: str = "",
+    body_tag: dict[str, TagArg] | None = None,
+    lang: str = "en",
+) -> str:
     """Get template for page"""
-    return f"""<!DOCTYPE HTML>
-<html lang=en>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{page_name}</title>
-    <style>
-      * {{
-        font-family: "Lucida Console";
-      }}
-      h1, footer {{
-        text-align: center;
-      }}
-      footer {{
-        position: absolute;
-        bottom: 0;
-        width: 100%;
-      }}
-    </style>
-  </head>
-  <body>
-    <h1>{page_name}</h1>
-{indent(4, body)}
-  </body>
-</html>"""
+    if body_tag is None:
+        body_tag = {}
+    head_content = "\n".join(
+        (
+            tag("meta", charset="utf-8"),
+            tag(
+                "meta",
+                name="viewport",
+                content="width=device-width, initial-scale=1",
+            ),
+            wrap_tag("title", title, False),
+            head,
+        )
+    )
 
+    html_content = "\n".join(
+        (
+            wrap_tag("head", head_content),
+            wrap_tag("body", body, block=True, **body_tag),
+        )
+    )
 
-#     <footer>
-#       <hr>
-#       <p>{__title__} v{__version__} © {__author__}</p>
-#     </footer>
-#   </body>
-# </html>"""
+    return "\n".join(
+        (
+            tag("!DOCTYPE HTML"),
+            wrap_tag(
+                "html",
+                html_content,
+                lang=lang,
+            ),
+        )
+    )
 
 
 def contain_in_box(inside: str, name: str | None = None) -> str:
     """Contain HTML in a box."""
     if name is not None:
-        inside = f"<span>{name}</span>\n<br>\n" + inside
-    return f"""
-<div style="background: ghostwhite;
-            padding: 4px;
-            border: 1px solid lightgray;
-            margin: 4px;">
-{indent(2, inside)}
-</div>"""[
-        1:
-    ]
+        inside = "\n".join(
+            (
+                wrap_tag("span", name),
+                tag("br"),
+                inside,
+            )
+        )
+    return wrap_tag(
+        "div",
+        inside,
+        style=" ".join(
+            css_style(
+                background_color="ghostwhite",
+                padding="2px",
+                border=("2px", "solid", "lightgray"),
+                margin="4px",
+            )
+        ),
+    )
 
 
 def radio_select_dict(
@@ -99,8 +175,8 @@ def radio_select_dict(
         }
         if value == default:
             args["checked"] = "checked"
-        lines.append(get_tag("input", args))
-        lines.append(wrap_tag("label", display, False, {"for": cid}))
+        lines.append(tag("input", **args))
+        lines.append(wrap_tag("label", display, False, **{"for": cid}))
         lines.append("<br>")
         count += 1
     return "\n".join(lines)
@@ -117,12 +193,13 @@ def radio_select_box(
     return contain_in_box("<br>\n" + radios, box_title)
 
 
-def field_select(
+def input_field(
     field_id: str,
     field_title: str | None,
     *,
     field_type: str = "text",
     default: str | None = None,
+    attrs: dict[str, str] | None = None,
 ) -> str:
     """Create input field"""
     lines = []
@@ -131,37 +208,41 @@ def field_select(
         "id": field_id,
         "name": field_id,
     }
+    if attrs is not None:
+        for key, value in attrs.items():
+            if not key.removesuffix("_") in args:
+                args[key] = value
     if default is not None:
         args["value"] = default
-    lines.append(wrap_tag("label", field_title, False, {"for": field_id}))
-    lines.append(get_tag("input", args))
+    if field_title is not None:
+        lines.append(wrap_tag("label", field_title, False, for_=field_id))
+    lines.append(tag("input", **args))
     return "\n".join(lines)
 
 
-def get_list(values: list[str]) -> str:
+def bullet_list(values: list[str]) -> str:
     """Return HTML list from values"""
     display = "\n".join(wrap_tag("li", v) for v in values)
     return wrap_tag("ul", display)
 
 
-def get_form(
+def form(
     form_id: str,
     contents: str,
     submit_display: str,
     form_title: str | None = None,
 ) -> str:
     """Return HTML form"""
-    submit = get_tag("input", {"type": "submit", "value": submit_display})
+    submit = tag("input", type_="submit", value=submit_display)
     html = f"""{contents}
 <br>
 {submit}"""
     title = ""
     if form_title is not None:
         title = f"<b>{form_title}</b>\n"
-    args = {"name": form_id, "method": "post"}
-    return title + wrap_tag("form", html, True, args)
+    return title + wrap_tag("form", html, True, name=form_id, method="post")
 
 
 def create_link(reference: str, display: str) -> str:
     """Create link to reference"""
-    return wrap_tag("a", display, False, {"href": reference})
+    return wrap_tag("a", display, False, href="reference")
