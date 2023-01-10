@@ -25,7 +25,7 @@ import trio
 from dotenv import load_dotenv
 from hypercorn.config import Config
 from hypercorn.trio import serve
-from quart import render_template_string, request
+from quart import request
 from quart_auth import (AuthManager, AuthUser, current_user, login_required,
                         login_user, logout_user)
 from quart_trio import QuartTrio
@@ -58,8 +58,6 @@ def log(message: str, level: int = 0, log_dir: str | None = None) -> None:
     if not path.exists(log_file):
         with open(log_file, mode="w", encoding="utf-8") as file:
             file.close()
-    ##        log("Log file does not exist!", 1)
-    ##        log("Created log file")
     with open(log_file, mode="a", encoding="utf-8") as file:
         file.write(f"{log_msg}\n")
         file.close()

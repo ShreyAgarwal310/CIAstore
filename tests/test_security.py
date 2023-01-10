@@ -2,7 +2,6 @@ import random
 import secrets
 
 import pytest
-import trio
 
 from ciastore import security
 

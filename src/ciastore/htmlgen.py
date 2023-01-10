@@ -1,7 +1,7 @@
-"""HTML Generation - Generate HTML programatically"""
+"""HTML Generation - Generate HTML & CSS programatically"""
 
 
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 
 
 def indent(level: int, text: str) -> str:
@@ -19,7 +19,7 @@ def deindent(level: int, text: str) -> str:
 TagArg = str | int | float | bool
 
 
-def _quote_strings(values: TagArg) -> Generator[str, None, None]:
+def _quote_strings(values: Iterable[TagArg]) -> Generator[str, None, None]:
     """Wrap string arguments with spaces in quotes"""
     for value in values:
         if isinstance(value, str) and " " in value:
@@ -51,13 +51,14 @@ def css_style(
 
 def css(
     selector: str | list[str] | tuple[str, ...],
+    /,
     **kwargs: TagArg | list[TagArg] | tuple[TagArg, ...],
 ) -> str:
     """Return CSS block"""
     if isinstance(selector, (list, tuple)):
         selector = ", ".join(selector)
     properties = indent(2, "\n".join(css_style(**kwargs)))
-    return f"{selector} {{\n{properties};\n}}"
+    return f"{selector} {{\n{properties}\n}}"
 
 
 def _process_tag_args(args: dict[str, TagArg]) -> Generator[str, None, None]:
@@ -67,7 +68,7 @@ def _process_tag_args(args: dict[str, TagArg]) -> Generator[str, None, None]:
         yield f'{key}="{value}"'
 
 
-def tag(type_: str, **kwargs: TagArg) -> str:
+def tag(type_: str, /, **kwargs: TagArg) -> str:
     """Return HTML tag. Removes trailing underscore from argument names."""
     args = ""
     if kwargs:
@@ -78,6 +79,7 @@ def tag(type_: str, **kwargs: TagArg) -> str:
 def wrap_tag(
     type_: str,
     value: str,
+    /,
     block: bool = True,
     **kwargs: TagArg,
 ) -> str:
@@ -117,7 +119,7 @@ def template(
     html_content = "\n".join(
         (
             wrap_tag("head", head_content),
-            wrap_tag("body", body, **body_tag),
+            wrap_tag("body", body, block=True, **body_tag),
         )
     )
 
@@ -197,6 +199,7 @@ def input_field(
     *,
     field_type: str = "text",
     default: str | None = None,
+    attrs: dict[str, str] | None = None,
 ) -> str:
     """Create input field"""
     lines = []
@@ -205,13 +208,15 @@ def input_field(
         "id": field_id,
         "name": field_id,
     }
+    if attrs is not None:
+        for key, value in attrs.items():
+            if not key.removesuffix("_") in args:
+                args[key] = value
     if default is not None:
         args["value"] = default
     if field_title is not None:
-        # lintcheck: too-many-function-args (E1121): Too many positional arguments for function call
-        lines.append(wrap_tag("label", field_title, False, {"for": field_id}))
-    # lintcheck: too-many-function-args (E1121): Too many positional arguments for function call
-    lines.append(tag("input", args))
+        lines.append(wrap_tag("label", field_title, False, for_=field_id))
+    lines.append(tag("input", **args))
     return "\n".join(lines)
 
 
@@ -228,23 +233,16 @@ def form(
     form_title: str | None = None,
 ) -> str:
     """Return HTML form"""
-    # lintcheck: too-many-function-args (E1121): Too many positional arguments for function call
-    submit = tag("input", {"type": "submit", "value": submit_display})
+    submit = tag("input", type_="submit", value=submit_display)
     html = f"""{contents}
 <br>
 {submit}"""
     title = ""
     if form_title is not None:
         title = f"<b>{form_title}</b>\n"
-    args = {"name": form_id, "method": "post"}
-    # lintcheck: too-many-function-args (E1121): Too many positional arguments for function call
-    return title + wrap_tag("form", html, True, args)
+    return title + wrap_tag("form", html, True, name=form_id, method="post")
 
 
 def create_link(reference: str, display: str) -> str:
     """Create link to reference"""
-    # lintcheck: too-many-function-args (E1121): Too many positional arguments for function call
-    return wrap_tag("a", display, False, {"href": reference})
-
-
-# lintcheck: trailing-newlines (C0305): Trailing newlines
+    return wrap_tag("a", display, False, href="reference")
