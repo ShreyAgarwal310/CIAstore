@@ -220,10 +220,16 @@ def input_field(
     return "\n".join(lines)
 
 
-def bullet_list(values: list[str]) -> str:
+def bullet_list(
+    values: list[str],
+    kwargs: dict[str, TagArg] | None = None
+) -> str:
     """Return HTML list from values"""
-    display = "\n".join(wrap_tag("li", v) for v in values)
-    return wrap_tag("ul", display)
+    if kwargs is None:
+        kwargs = {}
+        assert kwargs is not None
+    display = "\n".join(wrap_tag("li", v, block = False) for v in values)
+    return wrap_tag("ul", display, block = True, **kwargs)
 
 
 def form(
@@ -245,4 +251,4 @@ def form(
 
 def create_link(reference: str, display: str) -> str:
     """Create link to reference"""
-    return wrap_tag("a", display, False, href="reference")
+    return wrap_tag("a", display, False, href=reference)
