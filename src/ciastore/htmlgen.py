@@ -221,15 +221,14 @@ def input_field(
 
 
 def bullet_list(
-    values: list[str],
-    kwargs: dict[str, TagArg] | None = None
+    values: list[str], kwargs: dict[str, TagArg] | None = None
 ) -> str:
     """Return HTML list from values"""
     if kwargs is None:
         kwargs = {}
         assert kwargs is not None
-    display = "\n".join(wrap_tag("li", v, block = False) for v in values)
-    return wrap_tag("ul", display, block = True, **kwargs)
+    display = "\n".join(wrap_tag("li", v, block=False) for v in values)
+    return wrap_tag("ul", display, block=True, **kwargs)
 
 
 def form(

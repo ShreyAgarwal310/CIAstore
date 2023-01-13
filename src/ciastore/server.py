@@ -126,10 +126,10 @@ def template(
                 "\n".join(
                     (
                         htmlgen.wrap_tag(
-                            'i',
+                            "i",
                             "If you're reading this, the web server "
                             "was installed correctly.™",
-                            block = False,
+                            block=False,
                         ),
                         htmlgen.tag("hr"),
                         htmlgen.wrap_tag(
@@ -329,27 +329,26 @@ async def root_get() -> str:
     if await current_user.is_authenticated:
         status = f"Hello logged in user {current_user.auth_id}."
         links = {
-            'View user data': '/restricted',
-            'Log Out': '/logout',
+            "View user data": "/restricted",
+            "Log Out": "/logout",
         }
     else:
         login_url = app.url_for("login_get", _external=True)
         login_link = htmlgen.create_link(login_url, "this link")
         status = f"Please log in at {login_link}."
         links = {
-            'Log In': '/login',
-            'Sign Up': '/signup',
+            "Log In": "/login",
+            "Sign Up": "/signup",
         }
-    link_block = htmlgen.bullet_list([
-        htmlgen.create_link(ref, disp)
-        for disp, ref in links.items()
-    ])
+    link_block = htmlgen.bullet_list(
+        [htmlgen.create_link(ref, disp) for disp, ref in links.items()]
+    )
     login_msg = htmlgen.wrap_tag("p", status)
     body = "\n".join(
         (
             name,
             htmlgen.contain_in_box(login_msg),
-            htmlgen.contain_in_box(link_block, 'Links:')
+            htmlgen.contain_in_box(link_block, "Links:"),
         )
     )
     return template("CompanyName.website", body)
