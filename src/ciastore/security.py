@@ -1,7 +1,11 @@
 "Security functions like hashing passwords"
 
 import base64
-import hashlib
+
+try:
+    from hashlib import sha3_256 as _raw_sha3_256
+except ValueError:  # Strange error checking that should'nt be possible
+    from _sha3 import sha3_256 as _raw_sha3_256
 import secrets
 import time
 from functools import wraps
@@ -51,7 +55,7 @@ def get_hash(hash_name: str, value: str) -> str:
 @hash_function
 def sha3_256(bytes_: bytes) -> bytes:
     """Get SHA3 256 hash of string."""
-    hash_obj = hashlib.sha3_256(bytes_)
+    hash_obj = _raw_sha3_256(bytes_)
     return hash_obj.digest()
 
 

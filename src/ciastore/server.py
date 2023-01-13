@@ -152,9 +152,11 @@ AuthManager(app)
 
 async def convert_joining(code: str) -> wkresp:
     """Convert joining record to student record"""
+    # Get people in progress of joining
     students = database.load(app.root_path / "records" / "students.json")
     joining = database.load(app.root_path / "records" / "joining.json")
 
+    # Get user accociated with code
     user = joining[code]
 
     del joining[code]
@@ -175,6 +177,7 @@ async def convert_joining(code: str) -> wkresp:
 @app.get("/signup")
 async def signup_get() -> str | wkresp:
     """Handle sign up get including code register"""
+    # Get code from request arguments if it exists
     code = request.args.get("code", None)
     if code is not None:
         joining = database.load(app.root_path / "records" / "joining.json")
