@@ -4,9 +4,9 @@
 import json
 from os import makedirs, path
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
-_LOADED: dict[str, "Database"] = {}
+_LOADED: dict[str, "Records"] = {}
 
 
 class Database(dict[str, Any]):
@@ -35,11 +35,97 @@ class Database(dict[str, Any]):
             json.dump(self, file)
 
 
-def load(file_path: str | Path) -> Database:
+class Table:
+    """Table from dictonary"""
+
+    __slots__ = ("_records", "_key_name")
+
+    def __init__(self, records: dict[str, Any], key_name: str) -> None:
+        self._records = records
+        self._key_name = key_name
+
+    def __repr__(self) -> str:
+        """Get text representation of table"""
+        size: dict[str, int] = {}
+        columns = self.keys()
+        for column in columns:
+            size[column] = len(column)
+            for value in self[column]:
+                if value is None:
+                    continue
+                if hasattr(value, "__len__"):
+                    length = len(value)
+                else:
+                    length = len(repr(value))
+                size[column] = max(size[column], length)
+        num_pad = len(str(len(self)))
+        lines = []
+        column_names = " ".join(c.ljust(l) for c, l in size.items())
+        lines.append("".rjust(num_pad) + " " + column_names)
+        for index in range(len(self)):
+            line = [str(index).ljust(num_pad)]
+            for column in columns:
+                line.append(str(self[column][index]).ljust(size[column]))
+            lines.append(" ".join(line))
+        return "\n".join(lines)
+
+    def __getitem__(self, column: str) -> tuple[Any, ...]:
+        if column not in self.keys():
+            return tuple((None for _ in range(len(self))))
+        if column == self._key_name:
+            return tuple(self._records.keys())
+        return tuple([row.get(column) for row in self._records.values()])
+
+    def __setitem__(self, column: str, value: list[Any]) -> None:
+        if column == self._key_name:
+            raise ValueError("column is key type")
+        for key, set_value in zip(self._records, value):
+            if set_value is None:
+                continue
+            self._records[key][column] = set_value
+
+    def keys(self) -> set[str]:
+        """Get the name of every column"""
+        keys = {self._key_name}
+        for row in self._records.values():
+            keys |= set(row.keys())
+        return keys
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.keys())
+
+    def values(self) -> tuple[Any, ...]:
+        """Get every column"""
+        values = []
+        for key in self.keys():
+            values.append(self[key])
+        return tuple(values)
+
+    def items(self) -> tuple[tuple[str, Any], ...]:
+        items = []
+        for key in self.keys():
+            items.append((key, self[key]))
+        return tuple(items)
+
+    def __len__(self) -> int:
+        return len(self._records)
+
+
+class Records(Database):
+    """Records dict with columns"""
+
+    __slots__ = ()
+
+    def table(self, element_name: str) -> Table:
+        """Get table object given that keys are named element name"""
+        return Table(self, element_name)
+
+
+def load(file_path: str | Path) -> Records:
     """Load database from file path or return already loaded instance"""
     file = path.abspath(file_path)
     if file not in _LOADED:
-        _LOADED[file] = Database(file)
+        _LOADED[file] = Records(file)
     return _LOADED[file]
 
 

@@ -103,11 +103,14 @@ def template(
                     (
                         htmlgen.css("*", font_family="Lucida Console"),
                         htmlgen.css(("h1", "footer"), text_align="center"),
+                        htmlgen.css(("html", "body"), height="100%"),
                         htmlgen.css(
-                            "footer",
-                            position="absolute",
-                            bottom=0,
-                            width="100%",
+                            "body", display="flex", flex_direction="column"
+                        ),
+                        htmlgen.css(".content", flex=(1, 0, "auto")),
+                        htmlgen.css(
+                            ".footer",
+                            flex_shrink=0,
                         ),
                     )
                 ),
@@ -118,9 +121,17 @@ def template(
 
     body_data = "\n".join(
         (
-            htmlgen.wrap_tag("h1", __title__, False),
-            htmlgen.wrap_tag("h2", title, False),
-            body,
+            htmlgen.wrap_tag(
+                "div",
+                "\n".join(
+                    (
+                        htmlgen.wrap_tag("h1", "Caught In the Act", False),
+                        htmlgen.wrap_tag("h2", title, False),
+                        body,
+                    )
+                ),
+                class_="content",
+            ),
             htmlgen.wrap_tag(
                 "footer",
                 "\n".join(
@@ -150,28 +161,40 @@ app: Final = QuartTrio(__name__)
 AuthManager(app)
 
 
-async def convert_joining(code: str) -> wkresp:
+def get_user_by(**kwargs: str) -> set[str]:
+    """Get set of usernames of given type"""
+    users = database.load(app.root_path / "records" / "users.json")
+    table = users.table("username")
+    usernames: tuple[str, ...] = table["username"]
+
+    result: set[str] = set(usernames)
+
+    for key, value in kwargs.items():
+        sub_result: set[str] = set()
+        for index, entry_type in enumerate(table[key]):
+            if entry_type == value:
+                sub_result.add(usernames[index])
+        result &= sub_result
+    return result
+
+
+async def convert_joining(code: str) -> bool:
     """Convert joining record to student record"""
-    # Get people in progress of joining
-    students = database.load(app.root_path / "records" / "students.json")
-    joining = database.load(app.root_path / "records" / "joining.json")
+    # Get usernames with matching join code and who are joining
+    users = database.load(app.root_path / "records" / "users.json")
+    usernames = get_user_by(join_code=code, status="joining")
+    if len(usernames) != 1:
+        return False
+    username = usernames.pop()
 
-    # Get user accociated with code
-    user = joining[code]
+    users[username]["join_code"] = None
+    users[username]["status"] = "created"
+    users.write_file()
 
-    del joining[code]
-    joining.write_file()
-
-    students[user["username"]] = {
-        "password": user["password"],
-        "email": user["email"],
-    }
-    students.write_file()
-
-    user = AuthUser(user["username"])
+    user = AuthUser(username)
     login_user(user)
 
-    return app.redirect("/restricted")
+    return True
 
 
 @app.get("/signup")
@@ -180,18 +203,39 @@ async def signup_get() -> str | wkresp:
     # Get code from request arguments if it exists
     code = request.args.get("code", None)
     if code is not None:
-        joining = database.load(app.root_path / "records" / "joining.json")
-        if code in joining:
-            return await convert_joining(code)
+        success = await convert_joining(code)
+        if success:
+            return app.redirect("/")
 
-    fields = []
-    fields.append(htmlgen.input_field("username", "Username:"))
-    fields.append(
-        htmlgen.input_field("password", "Password:", field_type="password")
+    contents = "<br>\n".join(
+        (
+            htmlgen.input_field(
+                "username",
+                "Username:",
+                attrs={"placeholder": "Your LPS ID"},
+            ),
+            htmlgen.input_field(
+                "password",
+                "Password:",
+                field_type="password",
+                attrs={"placeholder": "Password that meets criterea"},
+            ),
+        )
     )
-    contents = "<br>\n".join(fields)
     form = htmlgen.form("signup", contents, "Sign up", "Sign up")
-    body = htmlgen.contain_in_box(form)
+    body = htmlgen.contain_in_box(
+        "\n".join(
+            (
+                htmlgen.wrap_tag(
+                    "i",
+                    "Password at least 15 characters long and "
+                    "at least 4 different characters",
+                ),
+                form,
+                htmlgen.create_link("/login", "Already have an account?"),
+            )
+        )
+    )
     return template("Sign up", body)
 
 
@@ -208,22 +252,23 @@ async def signup_post() -> wkresp | str:
     if not username or not password:
         return app.redirect("/signup#bad")
     if bool(set(username) - set("0123456789")) or len(username) != 6:
-        return app.redirect("/signup#bad")
+        return app.redirect("/signup#badusername")
     if len(password) < 15 or len(set(password)) < 4:
         return app.redirect("/signup#badpass")
 
-    students = database.load(app.root_path / "records" / "students.json")
-    joining = database.load(app.root_path / "records" / "joining.json")
+    users = database.load(app.root_path / "records" / "users.json")
 
-    if username in students:
+    if username in users and users[username].get("status") != "not_created":
         return app.redirect("/signup#userexists")
 
     # Email people
     email = f"{username}@class.lps.org"
 
     # If not already in joining list, add and send code
-    if username not in joining:
-        while (code := str(uuid.uuid4())) in joining:
+    if username not in get_user_by(status="joining"):
+        table = users.table("username")
+        existing_codes = table["join_code"]
+        while (code := str(uuid.uuid4())) in existing_codes:
             continue
         link = (
             app.url_for("signup_get", _external=True)
@@ -233,14 +278,21 @@ async def signup_post() -> wkresp | str:
         print(f"{link = }")
         # TODO: Message email code
 
-        joining[code] = {
-            "username": username,
-            "password": security.create_new_login_credentials(
-                password, PEPPER
-            ),
-            "email": email,
-        }
-        joining.write_file()
+        if username not in users:
+            users[username] = {}
+
+        users[username].update(
+            {
+                "password": security.create_new_login_credentials(
+                    password, PEPPER
+                ),
+                "email": users[username].get("email", email),
+                "type": users[username].get("type", "student"),
+                "status": "joining",
+                "join_code": code,
+            }
+        )
+        users.write_file()
 
     text = (
         f"Sent an email to {email} containing "
@@ -253,12 +305,24 @@ async def signup_post() -> wkresp | str:
 @app.get("/login")
 async def login_get() -> str:
     """Get login page"""
-    fields = []
-    fields.append(htmlgen.input_field("username", "Username:"))
-    fields.append(
-        htmlgen.input_field("password", "Password:", field_type="password")
+    contents = "<br>\n".join(
+        (
+            htmlgen.input_field(
+                "username",
+                "Username:",
+                attrs={"placeholder": "Your LPS ID numbers"},
+            ),
+            htmlgen.input_field(
+                "password",
+                "Password:",
+                field_type="password",
+                attrs={
+                    "placeholder": "Password at least 15 characters long "
+                    "and at least 4 different characters"
+                },
+            ),
+        )
     )
-    contents = "<br>\n".join(fields)
 
     form = htmlgen.form("login", contents, "Sign In", "Login")
     body = "<br>\n".join(
@@ -285,12 +349,12 @@ async def login_post() -> wkresp:
         return app.redirect("/login#bad")
 
     # Check Credentials here, e.g. username & password.
-    students = database.load(app.root_path / "records" / "students.json")
+    users = database.load(app.root_path / "records" / "users.json")
 
-    if username not in students:
+    if username not in users:
         return app.redirect("/login#bad")
 
-    database_value = students[username]["password"]
+    database_value = users[username]["password"]
     if not await security.compare_hash(password, database_value, PEPPER):
         # Bad password
         return app.redirect("/login#badpass")
@@ -299,13 +363,13 @@ async def login_post() -> wkresp:
     login_user(user)
     log(f"User {username!r} logged in")
 
-    return app.redirect("restricted")
+    return app.redirect("/")
 
 
 @app.get("/logout")
 async def logout() -> wkresp:
     """Handle logout"""
-    if current_user.is_authenticated:
+    if await current_user.is_authenticated:
         log(f"User {current_user.auth_id!r} logged out")
     logout_user()
     return app.redirect("login")
@@ -316,11 +380,11 @@ async def logout() -> wkresp:
 async def restricted_route() -> wkresp | str:
     """Dump user data"""
     assert current_user.auth_id is not None
-    students = database.load(app.root_path / "records" / "students.json")
-    if current_user.auth_id not in students:
+    users = database.load(app.root_path / "records" / "users.json")
+    if current_user.auth_id not in users:
         return app.redirect("/logout")
-    student = students[current_user.auth_id]
-    return json.dumps(student)
+    user = users[current_user.auth_id]
+    return json.dumps(user)
 
 
 @app.get("/")
@@ -354,13 +418,13 @@ async def root_get() -> str:
             htmlgen.contain_in_box(link_block, "Links:"),
         )
     )
-    return template("CompanyName.website", body)
+    return template("Caught In the Act", body)
 
 
 @app.get("/settings")
 async def settings_get() -> str:
     """Settings page get request"""
-    return template("CompanyName.website", "")
+    return template("settings", "TODO settings page")
 
 
 async def run_async(
@@ -436,4 +500,7 @@ or set COOKIE_SECRET environment variable."""
 
 if __name__ == "__main__":
     print(f"{__title__}\nProgrammed by {__author__}.\n")
-    run()
+    try:
+        run()
+    finally:
+        database.unload_all()

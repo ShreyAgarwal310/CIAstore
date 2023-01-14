@@ -244,7 +244,7 @@ def form(
 {submit}"""
     title = ""
     if form_title is not None:
-        title = f"<b>{form_title}</b>\n"
+        title = wrap_tag("b", form_title, block=False) + "\n"
     return title + wrap_tag("form", html, True, name=form_id, method="post")
 
 
