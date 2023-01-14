@@ -25,7 +25,7 @@ import trio
 from dotenv import load_dotenv
 from hypercorn.config import Config
 from hypercorn.trio import serve
-from quart import request
+from quart import Response, request
 from quart_auth import (AuthManager, AuthUser, current_user, login_required,
                         login_user, logout_user)
 from quart_trio import QuartTrio
@@ -218,22 +218,26 @@ async def signup_get() -> str | wkresp:
                 "password",
                 "Password:",
                 field_type="password",
-                attrs={"placeholder": "Password that meets criterea"},
+                attrs={"placeholder": "Password that meets criteria"},
             ),
         )
     )
     form = htmlgen.form("signup", contents, "Sign up", "Sign up")
-    body = htmlgen.contain_in_box(
-        "\n".join(
-            (
-                htmlgen.wrap_tag(
-                    "i",
-                    "Password at least 15 characters long and "
-                    "at least 4 different characters",
-                ),
-                form,
-                htmlgen.create_link("/login", "Already have an account?"),
-            )
+    body = "<br>\n".join(
+        (
+            htmlgen.contain_in_box(
+                "<br>\n".join(
+                    (
+                        form,
+                        htmlgen.wrap_tag(
+                            "i",
+                            "Password at least 15 characters long and "
+                            "at least 4 different characters",
+                        ),
+                    )
+                )
+            ),
+            htmlgen.create_link("/login", "Already have an account?"),
         )
     )
     return template("Sign up", body)
@@ -310,16 +314,13 @@ async def login_get() -> str:
             htmlgen.input_field(
                 "username",
                 "Username:",
-                attrs={"placeholder": "Your LPS ID numbers"},
+                attrs={"placeholder": "Username"},
             ),
             htmlgen.input_field(
                 "password",
                 "Password:",
                 field_type="password",
-                attrs={
-                    "placeholder": "Password at least 15 characters long "
-                    "and at least 4 different characters"
-                },
+                attrs={"placeholder": "Password"},
             ),
         )
     )
@@ -375,28 +376,30 @@ async def logout() -> wkresp:
     return app.redirect("login")
 
 
-@app.get("/restricted")
+@app.get("/user_data")
 @login_required
-async def restricted_route() -> wkresp | str:
+async def user_data_route() -> wkresp | Response:
     """Dump user data"""
     assert current_user.auth_id is not None
     users = database.load(app.root_path / "records" / "users.json")
     if current_user.auth_id not in users:
         return app.redirect("/logout")
-    user = users[current_user.auth_id]
-    return json.dumps(user)
+    user = users[current_user.auth_id].copy()
+    user["username"] = current_user.auth_id
+    return Response(
+        json.dumps(user, sort_keys=True),
+        content_type="application/json",
+    )
 
 
 @app.get("/")
 async def root_get() -> str:
     """Main page GET request"""
-    msg = "If you're reading this, the web server was installed correctly.™"
-    name = htmlgen.wrap_tag("i", msg, False)
 
     if await current_user.is_authenticated:
         status = f"Hello logged in user {current_user.auth_id}."
         links = {
-            "View user data": "/restricted",
+            "View user data": "/user_data",
             "Log Out": "/logout",
         }
     else:
@@ -413,9 +416,9 @@ async def root_get() -> str:
     login_msg = htmlgen.wrap_tag("p", status)
     body = "\n".join(
         (
-            name,
             htmlgen.contain_in_box(login_msg),
-            htmlgen.contain_in_box(link_block, "Links:"),
+            htmlgen.wrap_tag("p", "Links:"),
+            link_block,
         )
     )
     return template("Caught In the Act", body)

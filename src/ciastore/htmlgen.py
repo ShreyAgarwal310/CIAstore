@@ -208,6 +208,9 @@ def input_field(
         "id": field_id,
         "name": field_id,
     }
+    if args["type"] == "text":
+        # Browser defaults to text
+        del args["type"]
     if attrs is not None:
         for key, value in attrs.items():
             if not key.removesuffix("_") in args:
