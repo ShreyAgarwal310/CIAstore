@@ -10,5 +10,5 @@ pytest-cov==4.0.0
 pytest-trio==0.8.0
 pytest==7.2.0
 tox==4.2.5
-trio-typing==0.7.0
+trio-typing[mypy]==0.7.0
 pre-commit
