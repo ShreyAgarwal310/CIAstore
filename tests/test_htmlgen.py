@@ -111,6 +111,28 @@ def test_template() -> None:
     )
 
 
+def test_template_no_tag() -> None:
+    assert (
+        htmlgen.template(
+            "Cat Page",
+            "Cat Body",
+            head="Cat Head",
+        )
+        == """<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cat Page</title>
+    Cat Head
+  </head>
+  <body>
+    Cat Body
+  </body>
+</html>"""
+    )
+
+
 def test_contain_in_box_none() -> None:
     assert (
         htmlgen.contain_in_box("inside woo")
@@ -175,3 +197,35 @@ def test_radio_select_box() -> None:
   <br>
 </div>"""
     )
+
+
+def test_input_field_no_kwarg() -> None:
+    assert htmlgen.input_field('<id>', "woot") == '<label for="<id>">woot</label>\n<input id="<id>" name="<id>">'
+
+
+def test_input_field_with_type() -> None:
+    assert htmlgen.input_field('<id>', "woot", field_type="types woo") == '<label for="<id>">woot</label>\n<input type="types woo" id="<id>" name="<id>">'
+
+
+def test_input_field_attrs() -> None:
+    assert htmlgen.input_field('<id>', "woot", field_type="types woo", attrs={'autoselect': ''}) == '<label for="<id>">woot</label>\n<input type="types woo" id="<id>" name="<id>" autoselect="">'
+
+
+def test_bullet_list() -> None:
+    assert htmlgen.bullet_list(['one', 'two'], flag="bean") == '<ul flag="bean">\n  <li>one</li>\n  <li>two</li>\n</ul>'
+
+
+def test_create_link() -> None:
+    assert htmlgen.create_link("/ref", "title of lonk") == '<a href="/ref">title of lonk</a>'
+
+
+def test_link_list() -> None:
+    assert htmlgen.link_list({'/cat-page': "Cat memes", "/home": "Home page"}) == '<ul>\n  <li><a href="/cat-page">Cat memes</a></li>\n  <li><a href="/home">Home page</a></li>\n</ul>'
+
+
+def test_form() -> None:
+    assert htmlgen.form("form_id", "dis content woo", "hihi", "click to add title") == '<b>click to add title</b>\n<form name="form_id" method="post">\n  dis content woo\n  <br>\n  <input type="submit" value="hihi">\n</form>'
+
+
+def test_form_no_title() -> None:
+    assert htmlgen.form("form_id", "dis content woo", "hihi") == '<form name="form_id" method="post">\n  dis content woo\n  <br>\n  <input type="submit" value="hihi">\n</form>'

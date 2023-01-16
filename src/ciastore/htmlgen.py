@@ -102,7 +102,9 @@ def template(
 ) -> str:
     """Get template for page"""
     if body_tag is None:
-        body_tag = {}
+        body_tag_dict = {}
+    else:
+        body_tag_dict = body_tag
     head_content = "\n".join(
         (
             tag("meta", charset="utf-8"),
@@ -119,7 +121,7 @@ def template(
     html_content = "\n".join(
         (
             wrap_tag("head", head_content),
-            wrap_tag("body", body, block=True, **body_tag),
+            wrap_tag("body", body, block=True, **body_tag_dict),
         )
     )
 
@@ -226,6 +228,11 @@ def bullet_list(values: list[str], **kwargs: TagArg) -> str:
     return wrap_tag("ul", display, block=True, **kwargs)
 
 
+def create_link(reference: str, display: str) -> str:
+    """Create link to reference"""
+    return wrap_tag("a", display, False, href=reference)
+
+
 def link_list(links: dict[str, str], **kwargs: TagArg) -> str:
     """Return HTML bulleted list of links
 
@@ -249,8 +256,3 @@ def form(
     if form_title is not None:
         title = wrap_tag("b", form_title, block=False) + "\n"
     return title + wrap_tag("form", html, True, name=form_id, method="post")
-
-
-def create_link(reference: str, display: str) -> str:
-    """Create link to reference"""
-    return wrap_tag("a", display, False, href=reference)
