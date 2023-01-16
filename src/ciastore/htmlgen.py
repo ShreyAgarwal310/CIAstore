@@ -198,12 +198,11 @@ def input_field(
     field_title: str | None,
     *,
     field_type: str = "text",
-    default: str | None = None,
-    attrs: dict[str, str] | None = None,
+    attrs: dict[str, TagArg] | None = None,
 ) -> str:
     """Create input field"""
     lines = []
-    args = {
+    args: dict[str, TagArg] = {
         "type": field_type,
         "id": field_id,
         "name": field_id,
@@ -215,23 +214,24 @@ def input_field(
         for key, value in attrs.items():
             if not key.removesuffix("_") in args:
                 args[key] = value
-    if default is not None:
-        args["value"] = default
     if field_title is not None:
         lines.append(wrap_tag("label", field_title, False, for_=field_id))
     lines.append(tag("input", **args))
     return "\n".join(lines)
 
 
-def bullet_list(
-    values: list[str], kwargs: dict[str, TagArg] | None = None
-) -> str:
-    """Return HTML list from values"""
-    if kwargs is None:
-        kwargs = {}
-        assert kwargs is not None
+def bullet_list(values: list[str], **kwargs: TagArg) -> str:
+    """Return HTML bulleted list from values"""
     display = "\n".join(wrap_tag("li", v, block=False) for v in values)
     return wrap_tag("ul", display, block=True, **kwargs)
+
+
+def link_list(links: dict[str, str], **kwargs: TagArg) -> str:
+    """Return HTML bulleted list of links
+
+    Keys are the reference, values are displayed text"""
+    values = [create_link(ref, disp) for ref, disp in links.items()]
+    return bullet_list(values, **kwargs)
 
 
 def form(

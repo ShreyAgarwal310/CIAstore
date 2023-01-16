@@ -10,15 +10,16 @@ __author__ = "CSHS Members"
 __version__ = "0.0.0"
 
 
+import functools
 import json
 import socket
 import sys
 import time
 import uuid
-from functools import partial
+import warnings
 from os import getenv, makedirs, path
 from pathlib import Path
-from typing import Final
+from typing import Any, Awaitable, Callable, Final, TypeVar, cast
 from urllib.parse import urlencode
 
 import trio
@@ -26,12 +27,13 @@ from dotenv import load_dotenv
 from hypercorn.config import Config
 from hypercorn.trio import serve
 from quart import Response, request
-from quart_auth import (AuthManager, AuthUser, current_user, login_required,
-                        login_user, logout_user)
+from quart_auth import (AuthManager, AuthUser, Unauthorized, current_user,
+                        login_required, login_user, logout_user)
 from quart_trio import QuartTrio
 from werkzeug import Response as wkresp
+from werkzeug.exceptions import HTTPException
 
-from ciastore import database, htmlgen, security
+from ciastore import database, elapsed, htmlgen, security, sendmail
 
 load_dotenv()
 DOMAIN: str | None = None
@@ -119,17 +121,16 @@ def template(
         )
     )
 
+    join_body = (
+        htmlgen.wrap_tag("h1", title, False),
+        body,
+    )
+
     body_data = "\n".join(
         (
             htmlgen.wrap_tag(
                 "div",
-                "\n".join(
-                    (
-                        htmlgen.wrap_tag("h1", "Caught In the Act", False),
-                        htmlgen.wrap_tag("h2", title, False),
-                        body,
-                    )
-                ),
+                "\n".join(join_body),
                 class_="content",
             ),
             htmlgen.wrap_tag(
@@ -153,12 +154,26 @@ def template(
     )
 
     return htmlgen.template(
-        title, body_data, head=head_data, body_tag=body_tag
+        title, body_data, head=head_data, body_tag=body_tag, lang=lang
     )
 
 
 app: Final = QuartTrio(__name__)
 AuthManager(app)
+
+
+# Attributes users might have and what they do:
+# password : sha3_256 hash of password as string
+# type : "student", "teacher"
+# status : "not_created", "joining", "created"
+#   Not created is when teacher has assigned points but student has not
+#   set up account yet.
+#   Joining is when student has visited sign up page and has join code
+#   assigned, but has not used join code link yet.
+#   Created is when join code link visited and account is verified.
+# join_code : None or string of join code UUID
+# join_code_expires : UNIX epoch time after which join code is expired
+# tickets : Number of tickets account has
 
 
 def get_user_by(**kwargs: str) -> set[str]:
@@ -169,7 +184,8 @@ def get_user_by(**kwargs: str) -> set[str]:
 
     result: set[str] = set(usernames)
 
-    for key, value in kwargs.items():
+    for raw_key, value in kwargs.items():
+        key = raw_key.removesuffix("_")
         sub_result: set[str] = set()
         for index, entry_type in enumerate(table[key]):
             if entry_type == value:
@@ -178,21 +194,131 @@ def get_user_by(**kwargs: str) -> set[str]:
     return result
 
 
+Handler = TypeVar(
+    "Handler", bound=Callable[..., Awaitable[str | wkresp | Response]]
+)
+
+
+def login_require_only(
+    **attrs: str | set[str],
+) -> Callable[[Handler], Handler]:
+    """Require login and some attribute match."""
+
+    def get_wrapper(function: Handler) -> Handler:
+        """Get handler wrapper"""
+
+        @login_required
+        @functools.wraps(function)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            """Make sure current user matches attributes"""
+
+            if current_user.auth_id is None:
+                raise Unauthorized()
+            users = database.load(app.root_path / "records" / "users.json")
+
+            if current_user.auth_id not in users:
+                return app.redirect("/logout")
+
+            user = users[current_user.auth_id]
+            for raw_key, raw_value in attrs.items():
+                if isinstance(raw_value, str):
+                    value = set((raw_value,))
+                else:
+                    value = raw_value
+                key = raw_key.removesuffix("_")
+                if user.get(key) not in value:
+                    raise Unauthorized()
+
+            return await function(*args, **kwargs)
+
+        return cast(Handler, wrapper)
+
+    return get_wrapper
+
+
+def get_exception_page(code: int, name: str, desc: str) -> Response:
+    """Return Response for exception"""
+    body = htmlgen.wrap_tag("p", desc, block=False)
+    resp_body = template(f"{code} {name}", body)
+    return Response(resp_body, status=code)
+
+
+def pretty_exception(function: Handler) -> Handler:
+    """Make exception pages pretty"""
+
+    @functools.wraps(function)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return await function(*args, **kwargs)
+        except HTTPException as exception:
+            return get_exception_page(
+                exception.code or 404,
+                exception.name,
+                exception.description or "Exception",
+            )
+
+    return cast(Handler, wrapper)
+
+
+def create_uninitialized_account(
+    username: str, type_: str | None = None
+) -> None:
+    """Create uninitialized account. If type is None do not set."""
+    users = database.load(app.root_path / "records" / "users.json")
+    if username in users:
+        warnings.warn(
+            f"Attempted to create new account for {username} which exists"
+        )
+        return
+    users[username] = {
+        "status": "not_created",
+    }
+    if type_ is not None:
+        users[username]["type"] = type_
+    users.write_file()
+
+
+def add_tickets_to_user(username: str, count: int) -> None:
+    """Add ticket count to username. Create account if it doesn't exist."""
+    users = database.load(app.root_path / "records" / "users.json")
+
+    if username not in users:
+        create_uninitialized_account(username)
+    assert username in users, "Create uninitialized should have made account!"
+    users[username]["tickets"] = users[username].get("tickets", 0) + count
+    users.write_file()
+
+
 async def convert_joining(code: str) -> bool:
     """Convert joining record to student record"""
     # Get usernames with matching join code and who are joining
     users = database.load(app.root_path / "records" / "users.json")
     usernames = get_user_by(join_code=code, status="joining")
     if len(usernames) != 1:
+        log(f"Invalid code {code!r}")
         return False
     username = usernames.pop()
 
-    users[username]["join_code"] = None
+    # If expired, erase and continue
+    now = int(time.time())
+    expires = users[username].get("join_code_expires", now + 5)
+
+    del users[username]["join_code"]
+    del users[username]["join_code_expires"]
+
+    if now > expires:
+        users.write_file()
+
+        delta = elapsed.get_elapsed(now - expires)
+        log(f"{username} join code expired by {delta}")
+        return False
+
     users[username]["status"] = "created"
     users.write_file()
 
     user = AuthUser(username)
     login_user(user)
+    log(f"User {username} logged in from join code")
 
     return True
 
@@ -206,38 +332,45 @@ async def signup_get() -> str | wkresp:
         success = await convert_joining(code)
         if success:
             return app.redirect("/")
+        return app.redirect("/signup#codeinvalid")
 
     contents = "<br>\n".join(
         (
             htmlgen.input_field(
                 "username",
                 "Username:",
-                attrs={"placeholder": "Your LPS ID"},
+                attrs={
+                    "placeholder": "Your LPS ID",
+                    "autofocus": "",
+                    "required": "",
+                },
             ),
             htmlgen.input_field(
                 "password",
                 "Password:",
                 field_type="password",
-                attrs={"placeholder": "Password that meets criteria"},
+                attrs={
+                    "placeholder": "Secure password",
+                    "required": "",
+                },
             ),
         )
     )
+
     form = htmlgen.form("signup", contents, "Sign up", "Sign up")
     body = "<br>\n".join(
         (
-            htmlgen.contain_in_box(
-                "<br>\n".join(
-                    (
-                        form,
-                        htmlgen.wrap_tag(
-                            "i",
-                            "Password at least 15 characters long and "
-                            "at least 4 different characters",
-                        ),
-                    )
-                )
+            htmlgen.contain_in_box(form),
+            htmlgen.wrap_tag(
+                "i",
+                "Password needs at least 7 different characters",
+                block=False,
             ),
-            htmlgen.create_link("/login", "Already have an account?"),
+            htmlgen.link_list(
+                {
+                    "/login": "Already have an account?",
+                }
+            ),
         )
     )
     return template("Sign up", body)
@@ -253,23 +386,28 @@ async def signup_post() -> wkresp | str:
     username = response.get("username", "")
     password = response.get("password", "")
 
-    if not username or not password:
-        return app.redirect("/signup#bad")
     if bool(set(username) - set("0123456789")) or len(username) != 6:
         return app.redirect("/signup#badusername")
-    if len(password) < 15 or len(set(password)) < 4:
-        return app.redirect("/signup#badpass")
+    if len(set(password)) < 7:
+        return app.redirect("/signup#badpassword")
 
     users = database.load(app.root_path / "records" / "users.json")
 
-    if username in users and users[username].get("status") != "not_created":
-        return app.redirect("/signup#userexists")
+    create_link = True
 
-    # Email people
-    email = f"{username}@class.lps.org"
+    if username in users:
+        status = users[username].get("status", "not_created")
+        if status == "created":
+            return app.redirect("/signup#userexists")
+        if status == "joining":
+            now = int(time.time())
+            if users[username].get("join_code_expires", now + 5) < now:
+                create_link = False
 
     # If not already in joining list, add and send code
-    if username not in get_user_by(status="joining"):
+    email = f"{username}@class.lps.org"
+
+    if create_link:
         table = users.table("username")
         existing_codes = table["join_code"]
         while (code := str(uuid.uuid4())) in existing_codes:
@@ -279,11 +417,25 @@ async def signup_post() -> wkresp | str:
             + "?"
             + urlencode({"code": code})
         )
-        print(f"{link = }")
-        # TODO: Message email code
+        expires = int(time.time()) + 10 * 60  # Expires in 10 minutes
+
+        expire_time = elapsed.get_elapsed(expires - int(time.time()))
+        title = "Please Verify Your Account"
+        message_body = "\n".join(
+            (
+                "There was a request to create a new account for the",
+                f"Caught In the Act Store with the username {username!r}.",
+                f"Please click {htmlgen.create_link(link, 'this link')}",
+                "to verify your account.",
+                "",
+                "If you did not request to make an account, please ignore",
+                f"this message. This link will expire in about {expire_time}.",
+            )
+        )
+        sendmail.send(email, title, message_body)
 
         if username not in users:
-            users[username] = {}
+            create_uninitialized_account(username)
 
         users[username].update(
             {
@@ -294,6 +446,7 @@ async def signup_post() -> wkresp | str:
                 "type": users[username].get("type", "student"),
                 "status": "joining",
                 "join_code": code,
+                "join_code_expires": expires,
             }
         )
         users.write_file()
@@ -329,8 +482,12 @@ async def login_get() -> str:
     body = "<br>\n".join(
         (
             htmlgen.contain_in_box(form),
-            htmlgen.create_link("/signup", "Don't have an account?"),
-            # htmlgen.create_link('/forgot', "Forgot password?"),
+            htmlgen.link_list(
+                {
+                    "/signup": "Don't have an account?",
+                    # "/forgot": "Forgot password?",
+                }
+            ),
         )
     )
     return template("Login", body)
@@ -377,6 +534,7 @@ async def logout() -> wkresp:
 
 
 @app.get("/user_data")
+@pretty_exception
 @login_required
 async def user_data_route() -> wkresp | Response:
     """Dump user data"""
@@ -392,27 +550,131 @@ async def user_data_route() -> wkresp | Response:
     )
 
 
+@app.get("/add_tickets")
+@pretty_exception
+@login_require_only(type_="teacher")
+async def add_tickets_get() -> str:
+    """Add tickets page for teachers"""
+    contents = "<br>\n".join(
+        (
+            htmlgen.input_field(
+                "id",
+                "Student ID Number",
+                field_type="text",
+                attrs={
+                    "autofocus": "",
+                    "required": "",
+                    "placeholder": "LPS Student ID",
+                    "pattern": "[0-9]{6}",
+                },
+            ),
+            htmlgen.input_field(
+                "ticket_count",
+                "Number of Tickets",
+                field_type="number",
+                attrs={
+                    "required": "",
+                    "value": 1,
+                    "min": 1,
+                    "max": 10,
+                },
+            ),
+        )
+    )
+    form = htmlgen.form(
+        "add_tickets", contents, "Submit", "Give Student Ticket(s)"
+    )
+    body = htmlgen.contain_in_box(form)
+    return template("Add Tickets For Student", body)
+
+
+@app.post("/add_tickets")
+@pretty_exception
+@login_require_only(type_="teacher")
+async def add_tickets_post() -> str | wkresp:
+    """Handle post for add tickets form"""
+    multi_dict = await request.form
+    response = multi_dict.to_dict()
+
+    student_id = response.get("id", "")
+    ticket_count_raw = response.get("ticket_count", "")
+
+    try:
+        if not ticket_count_raw.isdigit():
+            raise ValueError
+        ticket_count = int(ticket_count_raw)
+        if ticket_count < 1 or ticket_count > 10:
+            raise ValueError
+    except ValueError:
+        return app.redirect("/add_tickets#badcount")
+
+    add_tickets_to_user(student_id, ticket_count)
+
+    plural = "" if ticket_count < 2 else "s"
+    body = "\n".join(
+        (
+            htmlgen.contain_in_box(
+                htmlgen.wrap_tag(
+                    "p",
+                    f"Added {ticket_count} ticket{plural} for {student_id}",
+                    block=False,
+                )
+            ),
+        )
+    )
+    return template("Added Tickets", body)
+
+
+@app.get("/settings")
+@pretty_exception
+@login_required
+async def settings_get() -> str:
+    """Settings page get request"""
+    return template("Under Construction: Settings", "TODO: settings page")
+
+
+@app.get("/invite_teacher")
+@pretty_exception
+@login_require_only(type_="teacher")
+async def invite_teacher_get() -> str:
+    """Create new teacher account"""
+    body = htmlgen.contain_in_box(
+        htmlgen.wrap_tag("strong", "TODO: invite teacher")
+    )
+    return template("Invite A Teacher", body)
+
+
 @app.get("/")
 async def root_get() -> str:
     """Main page GET request"""
 
     if await current_user.is_authenticated:
+        assert current_user.auth_id is not None
         status = f"Hello logged in user {current_user.auth_id}."
         links = {
-            "View user data": "/user_data",
-            "Log Out": "/logout",
+            "/user_data": "View user data",
+            "/logout": "Log Out",
+            "/settings": "Account Settings",
         }
+
+        users = database.load(app.root_path / "records" / "users.json")
+        assert current_user.auth_id in users
+        user = users[current_user.auth_id]
+        if user["type"] in {"teacher"}:
+            links.update(
+                {
+                    "/add_tickets": "Add Tickets for Student",
+                    "/invite_teacher": "Invite Teacher",
+                }
+            )
     else:
-        login_url = app.url_for("login_get", _external=True)
-        login_link = htmlgen.create_link(login_url, "this link")
+        login_link = htmlgen.create_link("/login", "this link")
         status = f"Please log in at {login_link}."
         links = {
-            "Log In": "/login",
-            "Sign Up": "/signup",
+            "/login": "Log In",
+            "/signup": "Sign Up",
         }
-    link_block = htmlgen.bullet_list(
-        [htmlgen.create_link(ref, disp) for disp, ref in links.items()]
-    )
+    link_block = htmlgen.link_list(links)
     login_msg = htmlgen.wrap_tag("p", status)
     body = "\n".join(
         (
@@ -422,12 +684,6 @@ async def root_get() -> str:
         )
     )
     return template("Caught In the Act", body)
-
-
-@app.get("/settings")
-async def settings_get() -> str:
-    """Settings page get request"""
-    return template("settings", "TODO settings page")
 
 
 async def run_async(
@@ -498,7 +754,11 @@ or set COOKIE_SECRET environment variable."""
         )
         return
 
-    trio.run(partial(run_async, root_dir, port, cookie_secret=cookie_secret))
+    trio.run(
+        functools.partial(
+            run_async, root_dir, port, cookie_secret=cookie_secret
+        )
+    )
 
 
 if __name__ == "__main__":

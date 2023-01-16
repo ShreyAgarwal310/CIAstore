@@ -1,14 +1,10 @@
-"Security functions like hashing passwords"
+"""Security functions like hashing passwords"""
 
 import base64
-
-try:
-    from hashlib import sha3_256 as _raw_sha3_256
-except ValueError:  # Strange error checking that should'nt be possible
-    from _sha3 import sha3_256 as _raw_sha3_256  # type: ignore
 import secrets
 import time
 from functools import wraps
+from hashlib import sha3_256 as _raw_sha3_256
 from typing import Callable, TypeVar
 
 import trio
