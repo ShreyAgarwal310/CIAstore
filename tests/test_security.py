@@ -1,5 +1,6 @@
 import random
 import secrets
+from typing import Callable
 
 import pytest
 
@@ -13,7 +14,7 @@ def no_random(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_hash_function(monkeypatch: pytest.MonkeyPatch) -> None:
-    functions = {}
+    functions: dict[str, Callable[[str], str]] = {}
     monkeypatch.setattr(security, "_NEWEST_HASH", "")
     monkeypatch.setattr(security, "_HASH_FUNCTIONS", functions)
 

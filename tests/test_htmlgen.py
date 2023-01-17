@@ -47,7 +47,7 @@ def test_css() -> None:
 
 @pytest.mark.parametrize(
     "type_,args,expect",
-    [
+    (
         ("p", {}, "<p>"),
         ("p", {"fish": "false"}, '<p fish="false">'),
         ("i", {}, "<i>"),
@@ -56,7 +56,7 @@ def test_css() -> None:
             {"type": "radio", "id": "0", "name": "test", "value_": "Example"},
             '<input type="radio" id="0" name="test" value="Example">',
         ),
-    ],
+    ),
 )
 def test_tag(type_: str, args: dict[str, str], expect: str) -> None:
     assert htmlgen.tag(type_, **args) == expect
@@ -200,32 +200,77 @@ def test_radio_select_box() -> None:
 
 
 def test_input_field_no_kwarg() -> None:
-    assert htmlgen.input_field('<id>', "woot") == '<label for="<id>">woot</label>\n<input id="<id>" name="<id>">'
+    assert (
+        htmlgen.input_field("<id>", "woot")
+        == """<label for="<id>">woot</label>
+<input id="<id>" name="<id>">"""
+    )
 
 
 def test_input_field_with_type() -> None:
-    assert htmlgen.input_field('<id>', "woot", field_type="types woo") == '<label for="<id>">woot</label>\n<input type="types woo" id="<id>" name="<id>">'
+    assert (
+        htmlgen.input_field("<id>", "woot", field_type="types woo")
+        == """<label for="<id>">woot</label>
+<input type="types woo" id="<id>" name="<id>">"""
+    )
 
 
 def test_input_field_attrs() -> None:
-    assert htmlgen.input_field('<id>', "woot", field_type="types woo", attrs={'autoselect': ''}) == '<label for="<id>">woot</label>\n<input type="types woo" id="<id>" name="<id>" autoselect="">'
+    assert (
+        htmlgen.input_field(
+            "<id>", "woot", field_type="types woo", attrs={"autoselect": ""}
+        )
+        == """<label for="<id>">woot</label>
+<input type="types woo" id="<id>" name="<id>" autoselect="">"""
+    )
 
 
 def test_bullet_list() -> None:
-    assert htmlgen.bullet_list(['one', 'two'], flag="bean") == '<ul flag="bean">\n  <li>one</li>\n  <li>two</li>\n</ul>'
+    assert (
+        htmlgen.bullet_list(["one", "two"], flag="bean")
+        == """<ul flag="bean">
+  <li>one</li>
+  <li>two</li>
+</ul>"""
+    )
 
 
 def test_create_link() -> None:
-    assert htmlgen.create_link("/ref", "title of lonk") == '<a href="/ref">title of lonk</a>'
+    assert (
+        htmlgen.create_link("/ref", "title of lonk")
+        == '<a href="/ref">title of lonk</a>'
+    )
 
 
 def test_link_list() -> None:
-    assert htmlgen.link_list({'/cat-page': "Cat memes", "/home": "Home page"}) == '<ul>\n  <li><a href="/cat-page">Cat memes</a></li>\n  <li><a href="/home">Home page</a></li>\n</ul>'
+    assert (
+        htmlgen.link_list({"/cat-page": "Cat memes", "/home": "Home page"})
+        == """<ul>
+  <li><a href="/cat-page">Cat memes</a></li>
+  <li><a href="/home">Home page</a></li>
+</ul>"""
+    )
 
 
 def test_form() -> None:
-    assert htmlgen.form("form_id", "dis content woo", "hihi", "click to add title") == '<b>click to add title</b>\n<form name="form_id" method="post">\n  dis content woo\n  <br>\n  <input type="submit" value="hihi">\n</form>'
+    assert (
+        htmlgen.form(
+            "form_id", "dis content woo", "hihi", "click to add title"
+        )
+        == """<b>click to add title</b>
+<form name="form_id" method="post">
+  dis content woo\n  <br>
+  <input type="submit" value="hihi">
+</form>"""
+    )
 
 
 def test_form_no_title() -> None:
-    assert htmlgen.form("form_id", "dis content woo", "hihi") == '<form name="form_id" method="post">\n  dis content woo\n  <br>\n  <input type="submit" value="hihi">\n</form>'
+    assert (
+        htmlgen.form("form_id", "dis content woo", "hihi")
+        == """<form name="form_id" method="post">
+  dis content woo
+  <br>
+  <input type="submit" value="hihi">
+</form>"""
+    )
