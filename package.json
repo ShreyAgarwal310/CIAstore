@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "blake2b": "^2.1.4"
+  }
+}
