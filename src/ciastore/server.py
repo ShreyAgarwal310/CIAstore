@@ -12,6 +12,7 @@ __version__ = "0.0.0"
 
 import functools
 import json
+import secrets
 import socket
 import sys
 import time
@@ -97,13 +98,18 @@ def template(
     lang: str = "en",
 ) -> str:
     """HTML Template for application"""
+    mono = "SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace"
     head_data = "\n".join(
         (
             htmlgen.wrap_tag(
                 "style",
                 "\n".join(
                     (
-                        htmlgen.css("*", font_family="Lucida Console"),
+                        htmlgen.css(
+                            "*",
+                            font_family="Lucida Console",
+                            box_sizing="border-box",
+                        ),
                         htmlgen.css(("h1", "footer"), text_align="center"),
                         htmlgen.css(("html", "body"), height="100%"),
                         htmlgen.css(
@@ -113,6 +119,14 @@ def template(
                         htmlgen.css(
                             ".footer",
                             flex_shrink=0,
+                        ),
+                        htmlgen.css(
+                            "code",
+                            padding=(".2em", ".4em"),
+                            background_color="rgba(158,167,179,0.4)",
+                            border_radius="6px",
+                            font_family=mono,
+                            line_height=1.5,
                         ),
                     )
                 ),
@@ -165,11 +179,14 @@ AuthManager(app)
 # Attributes users might have and what they do:
 # password : sha3_256 hash of password as string
 # type : "student", "teacher"
-# status : "not_created", "joining", "created"
+# status : "not_created", "joining", "created_auto_password", "created"
 #   Not created is when teacher has assigned points but student has not
-#   set up account yet.
+#     set up account yet.
 #   Joining is when student has visited sign up page and has join code
-#   assigned, but has not used join code link yet.
+#     assigned, but has not used join code link yet.
+#   Created Auto Password is when teacher account created with
+#     automatic password, flag so account can be remade if forgotten
+#     generated password.
 #   Created is when join code link visited and account is verified.
 # join_code : None or string of join code UUID
 # join_code_expires : UNIX epoch time after which join code is expired
@@ -517,6 +534,11 @@ async def login_post() -> wkresp:
         # Bad password
         return app.redirect("/login#badpass")
 
+    # Make sure to change status of auto password accounts
+    if users[username].get("status") == "created_auto_password":
+        users[username]["status"] = "created"
+        users.write_file()
+
     user = AuthUser(username)
     login_user(user)
     log(f"User {username!r} logged in")
@@ -638,10 +660,130 @@ async def settings_get() -> str:
 @login_require_only(type_="teacher")
 async def invite_teacher_get() -> str:
     """Create new teacher account"""
-    body = htmlgen.contain_in_box(
-        htmlgen.wrap_tag("strong", "TODO: invite teacher")
+    contents = "<br>\n".join(
+        (
+            htmlgen.input_field(
+                "new_account_username",
+                "New Account Username (3-16 lowercase characters)",
+                attrs={
+                    "autofocus": "",
+                    "required": "",
+                    "placeholder": "LPS Staff Username",
+                    "pattern": "[a-z]{3,16}",
+                },
+            ),
+            "",
+        )
+    )
+    form = htmlgen.form(
+        "invite_teacher",
+        contents,
+        "Create New Account",
+        "Create a teacher account",
+    )
+    body = "\n".join(
+        (
+            htmlgen.contain_in_box(form),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                    "/settings": "Account Settings",
+                    "/add_tickets": "Add Tickets for Student",
+                }
+            ),
+        )
     )
     return template("Invite A Teacher", body)
+
+
+@app.post("/invite_teacher")
+@pretty_exception
+@login_require_only(type_="teacher")
+async def invite_teacher_post() -> str | wkresp:
+    """Invite teacher form post handling"""
+    multi_dict = await request.form
+    response = multi_dict.to_dict()
+
+    new_account_username = response.get("new_account_username", "")
+
+    if not new_account_username:
+        return app.redirect("/invite_teacher#badusername")
+
+    possible_name = set("abcdefghijklmnopqrstuvwxyz0123456789")
+    if bool(set(new_account_username) - possible_name):
+        return app.redirect("/invite_teacher#badusername")
+
+    users = database.load(app.root_path / "records" / "users.json")
+
+    if new_account_username in users:
+        if users[new_account_username]["status"] != "created_auto_password":
+            return app.redirect("/invite_teacher#userexists")
+
+    password = secrets.token_urlsafe(16)
+
+    users[new_account_username] = {
+        "password": security.create_new_login_credentials(password, PEPPER),
+        "type": "teacher",
+        "status": "created_auto_password",
+    }
+
+    users.write_file()
+
+    body = "\n".join(
+        (
+            htmlgen.wrap_tag(
+                "p",
+                "Created new account with login credentials:",
+                block=False,
+            ),
+            htmlgen.contain_in_box(
+                "".join(
+                    (
+                        "Username: ",
+                        htmlgen.wrap_tag(
+                            "code", new_account_username, block=False
+                        ),
+                        "\n",
+                        htmlgen.tag("br"),
+                        "\n",
+                        "Password: ",
+                        htmlgen.wrap_tag("code", password, block=False),
+                    )
+                )
+            ),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag(
+                "i",
+                "Password can be changed in settings later",
+                block=False,
+            ),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag(
+                "strong",
+                "Please write this down, it will not be viewable again!",
+                block=False,
+            ),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                    "/settings": "Account Settings",
+                    "/add_tickets": "Add Tickets for Student",
+                    "/invite_teacher": "Invite Another Teacher",
+                }
+            ),
+        )
+    )
+
+    return template("Created New Account!", body)
 
 
 @app.get("/")
@@ -679,7 +821,7 @@ async def root_get() -> str:
     body = "\n".join(
         (
             htmlgen.contain_in_box(login_msg),
-            htmlgen.wrap_tag("p", "Links:"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
             link_block,
         )
     )

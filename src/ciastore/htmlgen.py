@@ -156,6 +156,7 @@ def contain_in_box(inside: str, name: str | None = None) -> str:
                 padding="2px",
                 border=("2px", "solid", "lightgray"),
                 margin="4px",
+                display="inline-block",
             )
         ),
     )

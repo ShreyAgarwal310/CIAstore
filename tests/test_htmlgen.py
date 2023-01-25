@@ -136,7 +136,7 @@ def test_template_no_tag() -> None:
 def test_contain_in_box_none() -> None:
     assert (
         htmlgen.contain_in_box("inside woo")
-        == """<div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px;">
+        == """<div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px; display: inline-block;">
   inside woo
 </div>"""
     )
@@ -145,7 +145,7 @@ def test_contain_in_box_none() -> None:
 def test_contain_in_box_named() -> None:
     assert (
         htmlgen.contain_in_box("inside different", "Names here")
-        == """<div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px;">
+        == """<div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px; display: inline-block;">
   <span>
     Names here
   </span>
@@ -186,7 +186,7 @@ def test_radio_select_box() -> None:
         htmlgen.radio_select_box(
             "name_here", {"cat": "seven"}, box_title="click to add title"
         )
-        == """<div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px;">
+        == """<div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px; display: inline-block;">
   <span>
     click to add title
   </span>
