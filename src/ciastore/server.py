@@ -41,9 +41,9 @@ DOMAIN: str | None = None
 PEPPER: Final = getenv("COOKIE_SECRET", "")
 
 
-def log(message: str, level: int = 0, log_dir: str | None = None) -> None:
+def log(message: str, level: int = 1, log_dir: str | None = None) -> None:
     "Log a message to console and log file."
-    levels = ["INFO", "ERROR"]
+    levels = ["DEBUG", "INFO", "ERROR"]
 
     if log_dir is None:
         log_dir = path.join(path.dirname(__file__), "logs")
@@ -283,9 +283,9 @@ def create_uninitialized_account(
     """Create uninitialized account. If type is None do not set."""
     users = database.load(app.root_path / "records" / "users.json")
     if username in users:
-        warnings.warn(
-            f"Attempted to create new account for {username} which exists"
-        )
+        error = f"Attempted to create new account for {username} which exists"
+        warnings.warn(error)
+        log(error, 2)
         return
     users[username] = {
         "status": "not_created",
@@ -293,6 +293,7 @@ def create_uninitialized_account(
     if type_ is not None:
         users[username]["type"] = type_
     users.write_file()
+    log(f"Created uninitialized account {username!r}")
 
 
 def add_tickets_to_user(username: str, count: int) -> None:
@@ -304,6 +305,7 @@ def add_tickets_to_user(username: str, count: int) -> None:
     assert username in users, "Create uninitialized should have made account!"
     users[username]["tickets"] = users[username].get("tickets", 0) + count
     users.write_file()
+    log(f"User {username!r} recieved {count!r} tickets")
 
 
 async def convert_joining(code: str) -> bool:
@@ -327,7 +329,7 @@ async def convert_joining(code: str) -> bool:
         users.write_file()
 
         delta = elapsed.get_elapsed(now - expires)
-        log(f"{username} join code expired by {delta}")
+        log(f"{username!r} join code expired by {delta}")
         return False
 
     users[username]["status"] = "created"
@@ -335,7 +337,7 @@ async def convert_joining(code: str) -> bool:
 
     user = AuthUser(username)
     login_user(user)
-    log(f"User {username} logged in from join code")
+    log(f"User {username!r} logged in from join code")
 
     return True
 
@@ -467,6 +469,7 @@ async def signup_post() -> wkresp | str:
             }
         )
         users.write_file()
+        log(f"User {username!r} signed up")
 
     text = (
         f"Sent an email to {email} containing "
@@ -555,8 +558,8 @@ async def logout() -> wkresp:
     return app.redirect("login")
 
 
+# Remove this later, potential security vulnerability
 @app.get("/user_data")
-@pretty_exception
 @login_required
 async def user_data_route() -> wkresp | Response:
     """Dump user data"""
@@ -566,6 +569,7 @@ async def user_data_route() -> wkresp | Response:
         return app.redirect("/logout")
     user = users[current_user.auth_id].copy()
     user["username"] = current_user.auth_id
+    log(f"Record dump for {current_user.auth_id!r}", level=0)
     return Response(
         json.dumps(user, sort_keys=True),
         content_type="application/json",
@@ -642,6 +646,15 @@ async def add_tickets_post() -> str | wkresp:
                     block=False,
                 )
             ),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                }
+            ),
         )
     )
     return template("Added Tickets", body)
@@ -652,7 +665,132 @@ async def add_tickets_post() -> str | wkresp:
 @login_required
 async def settings_get() -> str:
     """Settings page get request"""
-    return template("Under Construction: Settings", "TODO: settings page")
+    links = {
+        "/settings/change-password": "Change Password",
+    }
+    body = "\n".join(
+        (
+            htmlgen.link_list(links),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                }
+            ),
+        )
+    )
+    return template("User Settings", body)
+
+
+@app.get("/settings/change-password")
+@pretty_exception
+@login_required
+async def settings_password_get() -> str:
+    contents = "<br>\n".join(
+        (
+            htmlgen.input_field(
+                "current_password",
+                "Current Password:",
+                field_type="password",
+                attrs={
+                    "placeholder": "Your current password",
+                    "required": "",
+                },
+            ),
+            htmlgen.input_field(
+                "new_password",
+                "New Password:",
+                field_type="password",
+                attrs={
+                    "placeholder": "New secure password",
+                    "required": "",
+                },
+            ),
+        )
+    )
+    form = htmlgen.form(
+        "change_password",
+        contents,
+        "Change Password",
+        "Change Account Password",
+    )
+    body = "\n".join(
+        (
+            htmlgen.contain_in_box(form),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                    "/settings": "All Account Settings",
+                }
+            ),
+        )
+    )
+    return template("Change Password", body)
+
+
+@app.post("/settings/change-password")
+@pretty_exception
+@login_required
+async def settings_password_post() -> wkresp | str:
+    """Handle password change form"""
+    assert current_user.auth_id is not None
+
+    multi_dict = await request.form
+    response = multi_dict.to_dict()
+
+    # Validate response
+    current_password = response.get("current_password", "")
+    new_password = response.get("new_password", "")
+
+    username = current_user.auth_id
+
+    if not current_password or not new_password:
+        return app.redirect("/settings/change-password#bad")
+
+    # Check Credentials here, e.g. username & password.
+    users = database.load(app.root_path / "records" / "users.json")
+
+    if username not in users:
+        return app.redirect("/logout")
+
+    if not await security.compare_hash(
+        current_password, users[username]["password"], PEPPER
+    ):
+        # Bad password
+        log(f"{username!r} did not enter own password in change password")
+        return app.redirect("/settings/change-password#current_not_match")
+
+    users[username]["password"] = security.create_new_login_credentials(
+        new_password, PEPPER
+    )
+    users.write_file()
+    log(f"{username!r} changed their password")
+
+    body = "\n".join(
+        (
+            htmlgen.wrap_tag(
+                "p", "Password changed successfully", block=False
+            ),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                    "/settings": "All Account Settings",
+                }
+            ),
+        )
+    )
+    return template("Password Changed", body)
 
 
 @app.get("/invite_teacher")
@@ -705,6 +843,8 @@ async def invite_teacher_get() -> str:
 @login_require_only(type_="teacher")
 async def invite_teacher_post() -> str | wkresp:
     """Invite teacher form post handling"""
+    assert current_user.auth_id is not None
+
     multi_dict = await request.form
     response = multi_dict.to_dict()
 
@@ -732,6 +872,9 @@ async def invite_teacher_post() -> str | wkresp:
     }
 
     users.write_file()
+
+    creator_username = current_user.auth_id
+    log(f"{creator_username!r} invited {new_account_username!r} as teacher")
 
     body = "\n".join(
         (
