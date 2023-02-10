@@ -172,7 +172,7 @@ def template(
     )
 
 
-app: Final = QuartTrio(__name__)
+app: Final = QuartTrio(__name__)  # pylint: disable=invalid-name
 AuthManager(app)
 
 
@@ -268,10 +268,16 @@ def pretty_exception(function: Handler) -> Handler:
         try:
             return await function(*args, **kwargs)
         except HTTPException as exception:
+            code = exception.code or 404
+            desc = exception.description or "An error occured"
+            if code == 401:
+                desc += "\n\nPlease " + htmlgen.create_link(
+                    "/login", "login to view this page"
+                )
             return get_exception_page(
-                exception.code or 404,
+                code,
                 exception.name,
-                exception.description or "Exception",
+                desc,
             )
 
     return cast(Handler, wrapper)
@@ -300,12 +306,51 @@ def add_tickets_to_user(username: str, count: int) -> None:
     """Add ticket count to username. Create account if it doesn't exist."""
     users = database.load(app.root_path / "records" / "users.json")
 
+    assert count > 0, f"Use subtract_user_tickets instead of adding {count}"
+
     if username not in users:
         create_uninitialized_account(username)
     assert username in users, "Create uninitialized should have made account!"
     users[username]["tickets"] = users[username].get("tickets", 0) + count
     users.write_file()
     log(f"User {username!r} recieved {count!r} tickets")
+
+
+def get_user_ticket_count(username: str) -> int:
+    """Get number of tickets user has at this time
+
+    Raises LookupError if username does not exist"""
+    users = database.load(app.root_path / "records" / "users.json")
+
+    if username not in users:
+        raise LookupError(f"User {username!r} does not exist")
+
+    count = users[username].get("tickets", 0)
+    assert isinstance(count, int)
+
+    return count
+
+
+def subtract_user_tickets(username: str, count: int) -> int:
+    """Remove tickets from user. Return number of tickets left.
+
+    Raises LookupError if username does not exist
+    Raises ValueError if count is greater than number of tickets in account"""
+    users = database.load(app.root_path / "records" / "users.json")
+
+    if username not in users:
+        raise LookupError(f"User {username!r} does not exist")
+
+    count = users[username].get("tickets", 0)
+    assert isinstance(count, int)
+    new = count - count
+
+    if new < 0:
+        raise ValueError(
+            f"Insufficiant tickets for user {username!r} to subtract {count}"
+        )
+    users[username]["tickets"] = new
+    return new
 
 
 async def convert_joining(code: str) -> bool:
@@ -532,7 +577,9 @@ async def login_post() -> wkresp:
     if username not in users:
         return app.redirect("/login#bad")
 
-    database_value = users[username]["password"]
+    database_value = users[username].get("password", None)
+    if database_value is None:
+        return app.redirect("/login#bad")
     if not await security.compare_hash(password, database_value, PEPPER):
         # Bad password
         return app.redirect("/login#badpass")
@@ -689,6 +736,7 @@ async def settings_get() -> str:
 @pretty_exception
 @login_required
 async def settings_password_get() -> str:
+    """Setting page for password change get"""
     contents = "<br>\n".join(
         (
             htmlgen.input_field(
@@ -929,6 +977,35 @@ async def invite_teacher_post() -> str | wkresp:
     return template("Created New Account!", body)
 
 
+@app.get("/tickets")
+@pretty_exception
+@login_required
+async def tickets_get() -> str:
+    """Tickets view page"""
+    assert current_user.auth_id is not None
+
+    username = current_user.auth_id
+    count = get_user_ticket_count(username)
+
+    contents = htmlgen.wrap_tag(
+        "h3", f"You currently have {count} tickets", block=False
+    )
+
+    body = "\n".join(
+        (
+            htmlgen.contain_in_box(contents),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                }
+            ),
+        )
+    )
+    return template("Ticket Count", body)
+
+
 @app.get("/")
 async def root_get() -> str:
     """Main page GET request"""
@@ -937,9 +1014,10 @@ async def root_get() -> str:
         assert current_user.auth_id is not None
         status = f"Hello logged in user {current_user.auth_id}."
         links = {
-            "/user_data": "View user data",
+            "/user_data": "[DEBUG] View user data",
             "/logout": "Log Out",
             "/settings": "Account Settings",
+            "/tickets": "View ticket count",
         }
 
         users = database.load(app.root_path / "records" / "users.json")

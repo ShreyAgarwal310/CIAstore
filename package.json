@@ -1,5 +1,1 @@
-{
-  "dependencies": {
-    "blake2b": "^2.1.4"
-  }
-}
+{"dependencies": {"blake2b": "^2.1.4"}}
