@@ -1,16 +1,16 @@
 repos:
   - repo: https://github.com/hadialqattan/pycln
-    rev: v2.1.2 # must match requirements_dev.txt
+    rev: 2.1.2 # must match requirements_dev.txt
     hooks:
       - id: pycln
         args: [--config=pyproject.toml, stubs, stdlib, tests, scripts]
   - repo: https://github.com/psf/black
-    rev: 22.12.0 # must match requirements_dev.txt
+    rev: 23.1.0 # must match requirements_dev.txt
     hooks:
       - id: black
         language_version: python3.11
   - repo: https://github.com/pycqa/isort
-    rev: 5.11.4 # must match requirements_dev.txt
+    rev: 5.12.0 # must match requirements_dev.txt
     hooks:
       - id: isort
         name: isort (python)
@@ -19,11 +19,11 @@ repos:
     hooks:
       - id: flake8
         additional_dependencies:
-          - "flake8-bugbear==22.12.6" # must match requirements_dev.txt
+          - "flake8-bugbear==23.1.20" # must match requirements_dev.txt
           - "flake8-noqa==1.3.0" # must match requirements_dev.txt
-          - "flake8-pyi==22.11.0" # must match requirements_dev.txt
+          - "flake8-pyi==23.1.2" # must match requirements_dev.txt
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v2.7.1
+    rev: 2.7.1
     hooks:
       - id: prettier
         types_or: [yaml]

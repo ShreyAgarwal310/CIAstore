@@ -4,4 +4,4 @@ quart-trio==0.10.0
 quart==0.18.3
 trio==0.22.0
 quart-auth==0.8.0 
-python-dotenv==0.21.0
+python-dotenv==0.21.1
