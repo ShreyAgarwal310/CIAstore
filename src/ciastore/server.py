@@ -67,6 +67,13 @@ def log(message: str, level: int = 1, log_dir: str | None = None) -> None:
     print(log_msg)
 
 
+# Stolen from WOOF (Web Offer One File), Copyright (C) 2004-2009 Simon Budig,
+# avalable at http://www.home.unix-ag.org/simon/woof
+# with modifications
+
+# Utility function to guess the IP (as a string) where the server can be
+# reached from the outside. Quite nasty problem actually.
+
 def find_ip() -> str:
     """Guess the IP where the server can be found from the network"""
     # we get a UDP-socket for the TEST-networks reserved by IANA.
