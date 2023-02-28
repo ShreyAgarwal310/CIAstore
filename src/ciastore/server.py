@@ -20,6 +20,7 @@ import warnings
 from os import getenv, makedirs, path
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Final, TypeVar, cast
+from urllib.parse import urlencode
 
 import trio
 from dotenv import load_dotenv
@@ -35,7 +36,6 @@ from werkzeug.exceptions import HTTPException
 from ciastore import database, elapsed, htmlgen, security
 
 # import uuid
-# from urllib.parse import urlencode
 
 
 load_dotenv()
@@ -333,7 +333,8 @@ def get_user_ticket_count(username: str) -> int:
     users = database.load(app.root_path / "records" / "users.json")
 
     if username not in users:
-        raise LookupError(f"User {username!r} does not exist")
+        # raise LookupError(f"User {username!r} does not exist")
+        return 0
 
     count = users[username].get("tickets", 0)
     assert isinstance(count, int)
@@ -990,18 +991,57 @@ async def invite_teacher_post() -> str | wkresp:
     return template("Created New Account!", body)
 
 
+def ticket_get_form() -> str:
+    """Generate form for ticket GET when no ID given"""
+    contents = "<br>\n".join(
+        (
+            htmlgen.input_field(
+                "student_id",
+                "Student ID:",
+                attrs={
+                    "placeholder": "Student ID Number",
+                    "autocomplete": "off",
+                },
+            ),
+        )
+    )
+
+    form = htmlgen.form(
+        "get_student_id", contents, "Display Tickets", "Enter Student ID"
+    )
+
+    body = "\n".join(
+        (
+            htmlgen.contain_in_box(form),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                }
+            ),
+        )
+    )
+    return template("Enter ID", body)
+
+
 @app.get("/tickets")
 @pretty_exception
-@login_required
-async def tickets_get() -> str:
+async def tickets_get() -> str | wkresp:
     """Tickets view page"""
-    assert current_user.auth_id is not None
+    # Get username from request arguments if it exists
+    username = request.args.get("id", None)
 
-    username = current_user.auth_id
+    if username is None:
+        return ticket_get_form()
+
+    if bool(set(username) - set("0123456789")):
+        # If ussername has any character except 0-9, bad
+        return ticket_get_form()
+
     count = get_user_ticket_count(username)
 
     contents = htmlgen.wrap_tag(
-        "h3", f"You currently have {count} tickets", block=False
+        "h3", f"{username!r} currently has {count!r} tickets", block=False
     )
 
     body = "\n".join(
@@ -1010,13 +1050,33 @@ async def tickets_get() -> str:
             htmlgen.wrap_tag("p", "Links:", block=False),
             htmlgen.link_list(
                 {
+                    "/tickets": "Display tickets for user",
                     "/": "Return to main page",
-                    "/logout": "Log Out",
                 }
             ),
         )
     )
     return template("Ticket Count", body)
+
+
+@app.post("/tickets")
+@pretty_exception
+async def tickets_post() -> str | wkresp:
+    """Invite teacher form post handling"""
+    multi_dict = await request.form
+    response = multi_dict.to_dict()
+
+    username = response.get("student_id", None)
+
+    if username is None:
+        return ticket_get_form()
+
+    if bool(set(username) - set("0123456789")):
+        # If ussername has any character except 0-9, bad
+        return ticket_get_form()
+
+    link = app.url_for("tickets_get") + "?" + urlencode({"id": username})
+    return app.redirect(link)
 
 
 @app.get("/")
