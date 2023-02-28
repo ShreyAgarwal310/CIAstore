@@ -16,12 +16,10 @@ import secrets
 import socket
 import sys
 import time
-import uuid
 import warnings
 from os import getenv, makedirs, path
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Final, TypeVar, cast
-from urllib.parse import urlencode
 
 import trio
 from dotenv import load_dotenv
@@ -34,7 +32,11 @@ from quart_trio import QuartTrio
 from werkzeug import Response as wkresp
 from werkzeug.exceptions import HTTPException
 
-from ciastore import database, elapsed, htmlgen, security, sendmail
+from ciastore import database, elapsed, htmlgen, security
+
+# import uuid
+# from urllib.parse import urlencode
+
 
 load_dotenv()
 DOMAIN: str | None = None
@@ -73,6 +75,7 @@ def log(message: str, level: int = 1, log_dir: str | None = None) -> None:
 
 # Utility function to guess the IP (as a string) where the server can be
 # reached from the outside. Quite nasty problem actually.
+
 
 def find_ip() -> str:
     """Guess the IP where the server can be found from the network"""
@@ -394,141 +397,141 @@ async def convert_joining(code: str) -> bool:
     return True
 
 
-@app.get("/signup")
-async def signup_get() -> str | wkresp:
-    """Handle sign up get including code register"""
-    # Get code from request arguments if it exists
-    code = request.args.get("code", None)
-    if code is not None:
-        success = await convert_joining(code)
-        if success:
-            return app.redirect("/")
-        return app.redirect("/signup#codeinvalid")
+# @app.get("/signup")
+# async def signup_get() -> str | wkresp:
+#    """Handle sign up get including code register"""
+#    # Get code from request arguments if it exists
+#    code = request.args.get("code", None)
+#    if code is not None:
+#        success = await convert_joining(code)
+#        if success:
+#            return app.redirect("/")
+#        return app.redirect("/signup#codeinvalid")
+#
+#    contents = "<br>\n".join(
+#        (
+#            htmlgen.input_field(
+#                "username",
+#                "Username:",
+#                attrs={
+#                    "placeholder": "Your LPS ID",
+#                    "autofocus": "",
+#                    "required": "",
+#                },
+#            ),
+#            htmlgen.input_field(
+#                "password",
+#                "Password:",
+#                field_type="password",
+#                attrs={
+#                    "placeholder": "Secure password",
+#                    "required": "",
+#                },
+#            ),
+#        )
+#    )
+#
+#    form = htmlgen.form("signup", contents, "Sign up", "Sign up")
+#    body = "<br>\n".join(
+#        (
+#            htmlgen.contain_in_box(form),
+#            htmlgen.wrap_tag(
+#                "i",
+#                "Password needs at least 7 different characters",
+#                block=False,
+#            ),
+#            htmlgen.link_list(
+#                {
+#                    "/login": "Already have an account?",
+#                }
+#            ),
+#        )
+#    )
+#    return template("Sign up", body)
 
-    contents = "<br>\n".join(
-        (
-            htmlgen.input_field(
-                "username",
-                "Username:",
-                attrs={
-                    "placeholder": "Your LPS ID",
-                    "autofocus": "",
-                    "required": "",
-                },
-            ),
-            htmlgen.input_field(
-                "password",
-                "Password:",
-                field_type="password",
-                attrs={
-                    "placeholder": "Secure password",
-                    "required": "",
-                },
-            ),
-        )
-    )
 
-    form = htmlgen.form("signup", contents, "Sign up", "Sign up")
-    body = "<br>\n".join(
-        (
-            htmlgen.contain_in_box(form),
-            htmlgen.wrap_tag(
-                "i",
-                "Password needs at least 7 different characters",
-                block=False,
-            ),
-            htmlgen.link_list(
-                {
-                    "/login": "Already have an account?",
-                }
-            ),
-        )
-    )
-    return template("Sign up", body)
-
-
-@app.post("/signup")
-async def signup_post() -> wkresp | str:
-    """Handle sign up form"""
-    multi_dict = await request.form
-    response = multi_dict.to_dict()
-
-    # Validate response
-    username = response.get("username", "")
-    password = response.get("password", "")
-
-    if bool(set(username) - set("0123456789")) or len(username) != 6:
-        return app.redirect("/signup#badusername")
-    if len(set(password)) < 7:
-        return app.redirect("/signup#badpassword")
-
-    users = database.load(app.root_path / "records" / "users.json")
-
-    create_link = True
-
-    if username in users:
-        status = users[username].get("status", "not_created")
-        if status == "created":
-            return app.redirect("/signup#userexists")
-        if status == "joining":
-            now = int(time.time())
-            if users[username].get("join_code_expires", now + 5) < now:
-                create_link = False
-
-    # If not already in joining list, add and send code
-    email = f"{username}@class.lps.org"
-
-    if create_link:
-        table = users.table("username")
-        existing_codes = table["join_code"]
-        while (code := str(uuid.uuid4())) in existing_codes:
-            continue
-        link = (
-            app.url_for("signup_get", _external=True)
-            + "?"
-            + urlencode({"code": code})
-        )
-        expires = int(time.time()) + 10 * 60  # Expires in 10 minutes
-
-        expire_time = elapsed.get_elapsed(expires - int(time.time()))
-        title = "Please Verify Your Account"
-        message_body = "\n".join(
-            (
-                "There was a request to create a new account for the",
-                f"Caught In the Act Store with the username {username!r}.",
-                f"Please click {htmlgen.create_link(link, 'this link')}",
-                "to verify your account.",
-                "",
-                "If you did not request to make an account, please ignore",
-                f"this message. This link will expire in about {expire_time}.",
-            )
-        )
-        sendmail.send(email, title, message_body)
-
-        if username not in users:
-            create_uninitialized_account(username)
-
-        users[username].update(
-            {
-                "password": security.create_new_login_credentials(
-                    password, PEPPER
-                ),
-                "email": users[username].get("email", email),
-                "type": users[username].get("type", "student"),
-                "status": "joining",
-                "join_code": code,
-                "join_code_expires": expires,
-            }
-        )
-        users.write_file()
-        log(f"User {username!r} signed up")
-
-    text = (
-        f"Sent an email to {email} containing "
-        + "your a link to verify your account."
-    )
-    body = htmlgen.wrap_tag("p", text, False)
-    return template("Check your email", body)
+# @app.post("/signup")
+# async def signup_post() -> wkresp | str:
+#    """Handle sign up form"""
+#    multi_dict = await request.form
+#    response = multi_dict.to_dict()
+#
+#    # Validate response
+#    username = response.get("username", "")
+#    password = response.get("password", "")
+#
+#    if bool(set(username) - set("0123456789")) or len(username) != 6:
+#        return app.redirect("/signup#badusername")
+#    if len(set(password)) < 7:
+#        return app.redirect("/signup#badpassword")
+#
+#    users = database.load(app.root_path / "records" / "users.json")
+#
+#    create_link = True
+#
+#    if username in users:
+#        status = users[username].get("status", "not_created")
+#        if status == "created":
+#            return app.redirect("/signup#userexists")
+#        if status == "joining":
+#            now = int(time.time())
+#            if users[username].get("join_code_expires", now + 5) < now:
+#                create_link = False
+#
+#    # If not already in joining list, add and send code
+#    email = f"{username}@class.lps.org"
+#
+#    if create_link:
+#        table = users.table("username")
+#        existing_codes = table["join_code"]
+#        while (code := str(uuid.uuid4())) in existing_codes:
+#            continue
+#        link = (
+#            app.url_for("signup_get", _external=True)
+#            + "?"
+#            + urlencode({"code": code})
+#        )
+#        expires = int(time.time()) + 10 * 60  # Expires in 10 minutes
+#
+#        expire_time = elapsed.get_elapsed(expires - int(time.time()))
+#        title = "Please Verify Your Account"
+#        message_body = "\n".join(
+#            (
+#                "There was a request to create a new account for the",
+#                f"Caught In the Act Store with the username {username!r}.",
+#                f"Please click {htmlgen.create_link(link, 'this link')}",
+#                "to verify your account.",
+#                "",
+#                "If you did not request to make an account, please ignore",
+#                f"this message. This link will expire in {expire_time}.",
+#            )
+#        )
+#        sendmail.send(email, title, message_body)
+#
+#        if username not in users:
+#            create_uninitialized_account(username)
+#
+#        users[username].update(
+#            {
+#                "password": security.create_new_login_credentials(
+#                    password, PEPPER
+#                ),
+#                "email": users[username].get("email", email),
+#                "type": users[username].get("type", "student"),
+#                "status": "joining",
+#                "join_code": code,
+#                "join_code_expires": expires,
+#            }
+#        )
+#        users.write_file()
+#        log(f"User {username!r} signed up")
+#
+#    text = (
+#        f"Sent an email to {email} containing "
+#        + "your a link to verify your account."
+#    )
+#    body = htmlgen.wrap_tag("p", text, False)
+#    return template("Check your email", body)
 
 
 @app.get("/login")
@@ -583,6 +586,9 @@ async def login_post() -> wkresp:
 
     if username not in users:
         return app.redirect("/login#bad")
+
+    if users[username].get("type", "student") == "student":
+        return app.redirect("/login#no-student-login")
 
     database_value = users[username].get("password", None)
     if database_value is None:
