@@ -1069,7 +1069,7 @@ def ticket_count_page(username: str) -> str:
     body = "\n".join(
         (
             htmlgen.contain_in_box(contents),
-            htmlgen.create_link(ref, "Link to this user")
+            htmlgen.create_link(ref, "Link to this user"),
             htmlgen.wrap_tag("p", "Links:", block=False),
             htmlgen.link_list(
                 {
@@ -1089,11 +1089,11 @@ async def tickets_get() -> str | wkresp:
     # Get username from request arguments if it exists
     username = request.args.get("id", None)
 
-    if username is None:
+    if not username:
         return ticket_get_form()
 
     if bool(set(username) - set("0123456789")):
-        # If ussername has any character except 0-9, bad
+        # If username has any character except 0-9, bad
         return ticket_get_form()
 
     return ticket_count_page(username)
@@ -1108,11 +1108,11 @@ async def tickets_post() -> str | wkresp:
 
     username = response.get("student_id", None)
 
-    if username is None:
+    if username:
         return ticket_get_form()
 
     if bool(set(username) - set("0123456789")):
-        # If ussername has any character except 0-9, bad
+        # If username has any character except 0-9, bad
         return ticket_get_form()
 
     return ticket_count_page(username)
@@ -1184,7 +1184,9 @@ async def run_async(
             ),
         }
         if DOMAIN:
-            config["certfile"] = f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
+            config[
+                "certfile"
+            ] = f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
             config["keyfile"] = f"/etc/letsencrypt/live/{DOMAIN}/privkey.pem"
         else:
             app.config["QUART_AUTH_COOKIE_SECURE"] = False
