@@ -314,9 +314,9 @@ def create_uninitialized_account(
 
 def add_tickets_to_user(username: str, count: int) -> None:
     """Add ticket count to username. Create account if it doesn't exist."""
-    users = database.load(app.root_path / "records" / "users.json")
-
     assert count > 0, f"Use subtract_user_tickets instead of adding {count}"
+
+    users = database.load(app.root_path / "records" / "users.json")
 
     if username not in users:
         create_uninitialized_account(username)
@@ -333,8 +333,7 @@ def get_user_ticket_count(username: str) -> int:
     users = database.load(app.root_path / "records" / "users.json")
 
     if username not in users:
-        # raise LookupError(f"User {username!r} does not exist")
-        return 0
+        raise LookupError(f"User {username!r} does not exist")
 
     count = users[username].get("tickets", 0)
     assert isinstance(count, int)
@@ -347,14 +346,17 @@ def subtract_user_tickets(username: str, count: int) -> int:
 
     Raises LookupError if username does not exist
     Raises ValueError if count is greater than number of tickets in account"""
+    assert count > 0, f"Use add_user_tickets instead of subtracting {count}"
+
     users = database.load(app.root_path / "records" / "users.json")
 
     if username not in users:
         raise LookupError(f"User {username!r} does not exist")
 
-    count = users[username].get("tickets", 0)
-    assert isinstance(count, int)
-    new = count - count
+    current_tickets = users[username].get("tickets", 0)
+
+    assert isinstance(current_tickets, int)
+    new = current_tickets - count
 
     if new < 0:
         raise ValueError(
@@ -637,9 +639,9 @@ async def user_data_route() -> wkresp | Response:
     )
 
 
-@app.get("/add_tickets")
+@app.get("/add-tickets")
 @pretty_exception
-@login_require_only(type_="teacher")
+@login_require_only(type_={"teacher", "manager"})
 async def add_tickets_get() -> str:
     """Add tickets page for teachers"""
     contents = "<br>\n".join(
@@ -669,15 +671,15 @@ async def add_tickets_get() -> str:
         )
     )
     form = htmlgen.form(
-        "add_tickets", contents, "Submit", "Give Student Ticket(s)"
+        "add-tickets", contents, "Submit", "Give Student Ticket(s)"
     )
     body = htmlgen.contain_in_box(form)
     return template("Add Tickets For Student", body)
 
 
-@app.post("/add_tickets")
+@app.post("/add-tickets")
 @pretty_exception
-@login_require_only(type_="teacher")
+@login_require_only(type_={"teacher", "manager"})
 async def add_tickets_post() -> str | wkresp:
     """Handle post for add tickets form"""
     multi_dict = await request.form
@@ -693,7 +695,7 @@ async def add_tickets_post() -> str | wkresp:
         if ticket_count < 1 or ticket_count > 10:
             raise ValueError
     except ValueError:
-        return app.redirect("/add_tickets#badcount")
+        return app.redirect("/add-tickets#badcount")
 
     add_tickets_to_user(student_id, ticket_count)
 
@@ -719,6 +721,20 @@ async def add_tickets_post() -> str | wkresp:
         )
     )
     return template("Added Tickets", body)
+
+
+@app.get("/subtract-tickets")
+@pretty_exception
+@login_require_only(type_="manager")
+async def subtract_tickets_get() -> str:
+    return template("TODO", "Work in progress")
+
+
+@app.post("/subtract-tickets")
+@pretty_exception
+@login_require_only(type_="manager")
+async def subtract_tickets_post() -> str:
+    return template("TODO", "Work in progress")
 
 
 @app.get("/settings")
@@ -855,9 +871,9 @@ async def settings_password_post() -> wkresp | str:
     return template("Password Changed", body)
 
 
-@app.get("/invite_teacher")
+@app.get("/invite-teacher")
 @pretty_exception
-@login_require_only(type_="teacher")
+@login_require_only(type_={"teacher", "manager"})
 async def invite_teacher_get() -> str:
     """Create new teacher account"""
     contents = "<br>\n".join(
@@ -876,7 +892,7 @@ async def invite_teacher_get() -> str:
         )
     )
     form = htmlgen.form(
-        "invite_teacher",
+        "invite-teacher",
         contents,
         "Create New Account",
         "Create a teacher account",
@@ -892,7 +908,7 @@ async def invite_teacher_get() -> str:
                     "/": "Return to main page",
                     "/logout": "Log Out",
                     "/settings": "Account Settings",
-                    "/add_tickets": "Add Tickets for Student",
+                    "/add-tickets": "Add Tickets for Student",
                 }
             ),
         )
@@ -900,9 +916,9 @@ async def invite_teacher_get() -> str:
     return template("Invite A Teacher", body)
 
 
-@app.post("/invite_teacher")
+@app.post("/invite-teacher")
 @pretty_exception
-@login_require_only(type_="teacher")
+@login_require_only(type_={"teacher", "manager"})
 async def invite_teacher_post() -> str | wkresp:
     """Invite teacher form post handling"""
     assert current_user.auth_id is not None
@@ -913,17 +929,17 @@ async def invite_teacher_post() -> str | wkresp:
     new_account_username = response.get("new_account_username", "")
 
     if not new_account_username:
-        return app.redirect("/invite_teacher#badusername")
+        return app.redirect("/invite-teacher#badusername")
 
     possible_name = set("abcdefghijklmnopqrstuvwxyz0123456789")
     if bool(set(new_account_username) - possible_name):
-        return app.redirect("/invite_teacher#badusername")
+        return app.redirect("/invite-teacher#badusername")
 
     users = database.load(app.root_path / "records" / "users.json")
 
     if new_account_username in users:
         if users[new_account_username]["status"] != "created_auto_password":
-            return app.redirect("/invite_teacher#userexists")
+            return app.redirect("/invite-teacher#userexists")
 
     password = secrets.token_urlsafe(16)
 
@@ -981,14 +997,28 @@ async def invite_teacher_post() -> str | wkresp:
                     "/": "Return to main page",
                     "/logout": "Log Out",
                     "/settings": "Account Settings",
-                    "/add_tickets": "Add Tickets for Student",
-                    "/invite_teacher": "Invite Another Teacher",
+                    "/add-tickets": "Add Tickets for Student",
+                    "/invite-teacher": "Invite Another Teacher",
                 }
             ),
         )
     )
 
     return template("Created New Account!", body)
+
+
+@app.get("/invite-manager")
+@pretty_exception
+@login_require_only(type_="manager")
+async def invite_manager_get() -> str:
+    return template("TODO", "Work in progress")
+
+
+@app.post("/invite-manager")
+@pretty_exception
+@login_require_only(type_="manager")
+async def invite_manager_post() -> str:
+    return template("TODO", "Work in progress")
 
 
 def ticket_get_form() -> str:
@@ -1024,6 +1054,34 @@ def ticket_get_form() -> str:
     return template("Enter ID", body)
 
 
+def ticket_count_page(username: str) -> str:
+    """Ticket count page for given username"""
+    try:
+        count = get_user_ticket_count(username)
+    except LookupError:
+        count = 0
+
+    contents = htmlgen.wrap_tag(
+        "h3", f"{username!r} currently has {count!r} tickets", block=False
+    )
+    ref = app.url_for("tickets_get") + "?" + urlencode({"id": username})
+
+    body = "\n".join(
+        (
+            htmlgen.contain_in_box(contents),
+            htmlgen.create_link(ref, "Link to this user")
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/tickets": "Display tickets for user",
+                    "/": "Return to main page",
+                }
+            ),
+        )
+    )
+    return template("Ticket Count", body)
+
+
 @app.get("/tickets")
 @pretty_exception
 async def tickets_get() -> str | wkresp:
@@ -1038,25 +1096,7 @@ async def tickets_get() -> str | wkresp:
         # If ussername has any character except 0-9, bad
         return ticket_get_form()
 
-    count = get_user_ticket_count(username)
-
-    contents = htmlgen.wrap_tag(
-        "h3", f"{username!r} currently has {count!r} tickets", block=False
-    )
-
-    body = "\n".join(
-        (
-            htmlgen.contain_in_box(contents),
-            htmlgen.wrap_tag("p", "Links:", block=False),
-            htmlgen.link_list(
-                {
-                    "/tickets": "Display tickets for user",
-                    "/": "Return to main page",
-                }
-            ),
-        )
-    )
-    return template("Ticket Count", body)
+    return ticket_count_page(username)
 
 
 @app.post("/tickets")
@@ -1075,8 +1115,7 @@ async def tickets_post() -> str | wkresp:
         # If ussername has any character except 0-9, bad
         return ticket_get_form()
 
-    link = app.url_for("tickets_get") + "?" + urlencode({"id": username})
-    return app.redirect(link)
+    return ticket_count_page(username)
 
 
 @app.get("/")
@@ -1096,11 +1135,11 @@ async def root_get() -> str:
         users = database.load(app.root_path / "records" / "users.json")
         assert current_user.auth_id in users
         user = users[current_user.auth_id]
-        if user["type"] in {"teacher"}:
+        if user["type"] in {"teacher", "manager"}:
             links.update(
                 {
-                    "/add_tickets": "Add Tickets for Student",
-                    "/invite_teacher": "Invite Teacher",
+                    "/add-tickets": "Add Tickets for Student",
+                    "/invite-teacher": "Invite Teacher",
                 }
             )
     else:
@@ -1145,10 +1184,11 @@ async def run_async(
             ),
         }
         if DOMAIN:
-            config["certfile"] = "/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
-            config["keyfile"] = "/etc/letsencrypt/live/{DOMAIN}/privkey.pem"
+            config["certfile"] = f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
+            config["keyfile"] = f"/etc/letsencrypt/live/{DOMAIN}/privkey.pem"
+        else:
+            app.config["QUART_AUTH_COOKIE_SECURE"] = False
         app.config["QUART_AUTH_COOKIE_SAMESITE"] = "Strict"
-        app.config["QUART_AUTH_COOKIE_SECURE"] = False
         app.config["SERVER_NAME"] = location
 
         app.static_folder = Path(root_dir, "static")
