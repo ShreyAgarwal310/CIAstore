@@ -727,14 +727,92 @@ async def add_tickets_post() -> str | wkresp:
 @pretty_exception
 @login_require_only(type_="manager")
 async def subtract_tickets_get() -> str:
-    return template("TODO", "Work in progress")
+    """Subtract tickets page for managers"""
+    contents = "<br>\n".join(
+        (
+            htmlgen.input_field(
+                "id",
+                "Student ID Number",
+                field_type="text",
+                attrs={
+                    "autofocus": "",
+                    "required": "",
+                    "placeholder": "LPS Student ID",
+                    "pattern": "[0-9]{6}",
+                },
+            ),
+            htmlgen.input_field(
+                "ticket_count",
+                "Number of Tickets",
+                field_type="number",
+                attrs={
+                    "required": "",
+                    "value": 1,
+                    "min": 1,
+                    "max": 100,
+                },
+            ),
+        )
+    )
+    form = htmlgen.form(
+        "add-tickets", contents, "Submit", "Subtract Student Ticket(s)"
+    )
+    body = htmlgen.contain_in_box(form)
+    return template("Subtrackt Tickets From Student", body)
 
 
 @app.post("/subtract-tickets")
 @pretty_exception
 @login_require_only(type_="manager")
-async def subtract_tickets_post() -> str:
-    return template("TODO", "Work in progress")
+async def subtract_tickets_post() -> wkresp | str:
+    """Handle post for subtract tickets form"""
+    multi_dict = await request.form
+    response = multi_dict.to_dict()
+
+    student_id = response.get("id", "")
+    ticket_count_raw = response.get("ticket_count", "")
+
+    try:
+        if not ticket_count_raw.isdigit():
+            raise ValueError
+        ticket_count = int(ticket_count_raw)
+        if ticket_count < 1 or ticket_count > 100:
+            raise ValueError
+    except ValueError:
+        return app.redirect("/add-tickets#badcount")
+
+    try:
+        tickets_left = subtract_user_tickets(student_id, ticket_count)
+    except LookupError:
+        # Username not exist
+        return app.redirect("/add-tickets#student-not-found")
+    except ValueError:
+        # Count > number of tickets in account
+        return app.redirect("/add-tickets#not-enough-tickets")
+
+    plural = "" if ticket_count < 2 else "s"
+    body = "\n".join(
+        (
+            htmlgen.contain_in_box(
+                htmlgen.wrap_tag(
+                    "p",
+                    f"Subtracted {ticket_count} ticket{plural} "
+                    f"from {student_id}. They now have {tickets_left} tickets",
+                    block=False,
+                )
+            ),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                }
+            ),
+        )
+    )
+    return template("Subtracted Tickets", body)
 
 
 @app.get("/settings")
@@ -1011,14 +1089,137 @@ async def invite_teacher_post() -> str | wkresp:
 @pretty_exception
 @login_require_only(type_="manager")
 async def invite_manager_get() -> str:
-    return template("TODO", "Work in progress")
+    """Create a new manager account"""
+    contents = "<br>\n".join(
+        (
+            htmlgen.input_field(
+                "new_account_username",
+                "New Account Username (3-16 lowercase characters)",
+                attrs={
+                    "autofocus": "",
+                    "required": "",
+                    "placeholder": "LPS Staff Username",
+                    "pattern": "[a-z]{3,16}",
+                },
+            ),
+            "",
+        )
+    )
+    form = htmlgen.form(
+        "invite-manager",
+        contents,
+        "Create New Account",
+        "Create a manager account",
+    )
+    body = "\n".join(
+        (
+            htmlgen.contain_in_box(form),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                    "/settings": "Account Settings",
+                    "/add-tickets": "Add Tickets for Student",
+                }
+            ),
+        )
+    )
+    return template("Invite A Manager", body)
 
 
 @app.post("/invite-manager")
 @pretty_exception
 @login_require_only(type_="manager")
-async def invite_manager_post() -> str:
-    return template("TODO", "Work in progress")
+async def invite_manager_post() -> wkresp | str:
+    """Invite manager form post handling"""
+    assert current_user.auth_id is not None
+
+    multi_dict = await request.form
+    response = multi_dict.to_dict()
+
+    new_account_username = response.get("new_account_username", "")
+
+    if not new_account_username:
+        return app.redirect("/invite-manager#badusername")
+
+    possible_name = set("abcdefghijklmnopqrstuvwxyz0123456789")
+    if bool(set(new_account_username) - possible_name):
+        return app.redirect("/invite-manager#badusername")
+
+    users = database.load(app.root_path / "records" / "users.json")
+
+    if new_account_username in users:
+        if users[new_account_username]["status"] != "created_auto_password":
+            return app.redirect("/invite-manager#userexists")
+
+    password = secrets.token_urlsafe(16)
+
+    users[new_account_username] = {
+        "password": security.create_new_login_credentials(password, PEPPER),
+        "type": "manager",
+        "status": "created_auto_password",
+    }
+
+    users.write_file()
+
+    creator_username = current_user.auth_id
+    log(f"{creator_username!r} invited {new_account_username!r} as manager")
+
+    body = "\n".join(
+        (
+            htmlgen.wrap_tag(
+                "p",
+                "Created new account with login credentials:",
+                block=False,
+            ),
+            htmlgen.contain_in_box(
+                "".join(
+                    (
+                        "Username: ",
+                        htmlgen.wrap_tag(
+                            "code", new_account_username, block=False
+                        ),
+                        "\n",
+                        htmlgen.tag("br"),
+                        "\n",
+                        "Password: ",
+                        htmlgen.wrap_tag("code", password, block=False),
+                    )
+                )
+            ),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag(
+                "i",
+                "Password can be changed in settings later",
+                block=False,
+            ),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag(
+                "strong",
+                "Please write this down, it will not be viewable again!",
+                block=False,
+            ),
+            htmlgen.tag("br"),
+            htmlgen.tag("br"),
+            htmlgen.wrap_tag("p", "Links:", block=False),
+            htmlgen.link_list(
+                {
+                    "/": "Return to main page",
+                    "/logout": "Log Out",
+                    "/settings": "Account Settings",
+                    "/add-tickets": "Add Tickets for Student",
+                    "/invite-teacher": "Invite a Teacher",
+                    "/invite-manager": "Invite Another Manager",
+                }
+            ),
+        )
+    )
+
+    return template("Created New Account!", body)
 
 
 def ticket_get_form() -> str:
