@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/hadialqattan/pycln
-    rev: 2.1.2 # must match requirements_dev.txt
+    rev: 2.1.3 # must match requirements_dev.txt
     hooks:
       - id: pycln
         args: [--config=pyproject.toml, stubs, stdlib, tests, scripts]
@@ -19,7 +19,7 @@ repos:
     hooks:
       - id: flake8
         additional_dependencies:
-          - "flake8-bugbear==23.1.20" # must match requirements_dev.txt
+          - "flake8-bugbear==23.2.13" # must match requirements_dev.txt
           - "flake8-noqa==1.3.0" # must match requirements_dev.txt
           - "flake8-pyi==23.1.2" # must match requirements_dev.txt
   - repo: https://github.com/pre-commit/mirrors-prettier
