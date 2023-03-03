@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/hadialqattan/pycln
-    rev: 2.1.3 # must match requirements_dev.txt
+    rev: v2.1.3 # must match requirements_dev.txt
     hooks:
       - id: pycln
         args: [--config=pyproject.toml, stubs, stdlib, tests, scripts]
