@@ -38,18 +38,29 @@
     <div class="content">
       <h1>Caught In the Act</h1>
       <div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px; display: inline-block;">
+        {% if username == "" %}
+        <p>
+          Please log in at <a href="/login">this link</a>.
+        </p>
+        {% else %}
         <p>
           Hello logged in user {{ username }}.
         </p>
+        {% endif %}
       </div>
       <p>Links:</p>
       <ul>
+        {% if username == "" %}
+        <li><a href="/login">Log In</a></li>
+        <li><a href="/signup">Sign Up</a></li>
+        {% else %}
         <li><a href="/user_data">[DEBUG] View user data</a></li>
         <li><a href="/logout">Log Out</a></li>
         <li><a href="/settings">Account Settings</a></li>
         <li><a href="/tickets">View ticket count</a></li>
         <li><a href="/add-tickets">Add Tickets for Student</a></li>
         <li><a href="/invite-teacher">Invite Teacher</a></li>
+        {% endif %}
       </ul>
     </div>
     <footer>
