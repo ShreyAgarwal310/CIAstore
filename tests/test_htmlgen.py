@@ -225,6 +225,17 @@ def test_input_field_attrs() -> None:
     )
 
 
+def test_input_field_exception() -> None:
+    with pytest.raises(ValueError):
+        htmlgen.input_field(
+            "field_id",
+            "title",
+            attrs={
+                "id": "attempt_to_override_id",
+            },
+        )
+
+
 def test_bullet_list() -> None:
     assert (
         htmlgen.bullet_list(["one", "two"], flag="bean")
@@ -259,8 +270,9 @@ def test_form() -> None:
         )
         == """<b>click to add title</b>
 <form name="form_id" method="post">
-  dis content woo\n  <br>
-  <input type="submit" value="hihi">
+  dis content woo
+  <br>
+  <input type="submit" id="form_id_submit_button" name="form_id_submit_button" value="hihi">
 </form>"""
     )
 
@@ -271,6 +283,6 @@ def test_form_no_title() -> None:
         == """<form name="form_id" method="post">
   dis content woo
   <br>
-  <input type="submit" value="hihi">
+  <input type="submit" id="form_id_submit_button" name="form_id_submit_button" value="hihi">
 </form>"""
     )

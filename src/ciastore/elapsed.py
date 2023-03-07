@@ -92,15 +92,21 @@ def split_end(data: str, final: str = "and") -> list[str]:
     return [v.strip() for v in values if v]
 
 
-def get_time_of_day(hour: int) -> str:
-    """Figure out and return what time of day it is."""
+def get_time_of_day(hour: int, season: int = 0) -> str:
+    """Figure out and return what time of day it is.
+
+    If season is -1, it is winter and afternoon is 12 PM to 4 PM
+    If season is  0, season is unknown and afternoon is 12 PM to 6 PM
+    If season is  1, it is summer and afternoon is 12 PM to 8 PM"""
+    season_offset = season << 1  # quick multiply by 2
+
     if hour > 4 and hour < 12:
         return "Morning"
-    elif hour > 11 and hour < 19:
-        # "It is usually from 12 PM to 6 PM,
+    elif hour > 11 and hour < (19 + season_offset):
+        # "Afternoon is usually from 12 PM to 6 PM,
         # but during winter it may be from 12 PM to 4 PM
         # and during summer it may be from 12 PM to 8 PM."
         return "Afternoon"
-    elif hour > 18 and hour < 22:
+    elif hour > (18 + season_offset) and hour < 22:
         return "Evening"
     return "Night"

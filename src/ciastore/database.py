@@ -4,7 +4,7 @@
 import json
 from os import makedirs, path
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 _LOADED: dict[str, "Records"] = {}
 
@@ -36,7 +36,9 @@ class Database(dict[str, Any]):
 
 
 class Table:
-    """Table from dictonary"""
+    """Table from dictonary
+
+    Allows getting and setting entire columns of a database"""
 
     __slots__ = ("_records", "_key_name")
 
@@ -76,7 +78,7 @@ class Table:
             return tuple(self._records.keys())
         return tuple([row.get(column) for row in self._records.values()])
 
-    def __setitem__(self, column: str, value: list[Any]) -> None:
+    def __setitem__(self, column: str, value: Iterable[Any]) -> None:
         if column == self._key_name:
             raise ValueError("column is key type")
         for key, set_value in zip(self._records, value):
@@ -85,7 +87,7 @@ class Table:
             self._records[key][column] = set_value
 
     def keys(self) -> set[str]:
-        """Get the name of every column"""
+        """Return the name of every column"""
         keys = {self._key_name}
         for row in self._records.values():
             keys |= set(row.keys())
@@ -95,7 +97,7 @@ class Table:
         return iter(self.keys())
 
     def values(self) -> tuple[Any, ...]:
-        """Get every column"""
+        """Return every column"""
         values = []
         for key in self.keys():
             values.append(self[key])

@@ -131,6 +131,30 @@ def test_compare_hash_time_attackable_correct() -> None:
     )
 
 
+def test_compare_hash_sync_bad_password() -> None:
+    assert not security.compare_hash_sync(
+        "super passwords",
+        "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$eA5A53S/Kl11r7a9Q9YzjBVUDuh4i4Nn0cNl282+Xts=",
+        "peppers",
+    )
+
+
+def test_compare_hash_sync_different_pepper() -> None:
+    assert not security.compare_hash_sync(
+        "totatoe",
+        "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$eA5A53S/Kl11r7a9Q9YzjBVUDuh4i4Nn0cNl282+Xts=",
+        "different",
+    )
+
+
+def test_compare_hash_sync_correct() -> None:
+    assert security.compare_hash_sync(
+        "totatoe",
+        "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$eA5A53S/Kl11r7a9Q9YzjBVUDuh4i4Nn0cNl282+Xts=",
+        "peppers",
+    )
+
+
 @pytest.mark.trio
 async def test_compare_hash_correct() -> None:
     assert await security.compare_hash(

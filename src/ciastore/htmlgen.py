@@ -28,12 +28,20 @@ def _quote_strings(values: Iterable[TagArg]) -> Generator[str, None, None]:
         yield f"{value}"
 
 
-def _process_properties(
+def _key_to_html_property(key: str) -> str:
+    """Convert a key to an HTML property.
+
+    This function takes a string `key` and returns a modified version
+    of the string that can be used as an HTML property in an HTML tag."""
+    return key.removesuffix("_").replace("_", "-")
+
+
+def _generate_css_declarations(
     properties: dict[str, TagArg | list[TagArg] | tuple[TagArg, ...]]
 ) -> Generator[str, None, None]:
     """Yield declarations"""
     for key, values in properties.items():
-        property_ = key.removesuffix("_").replace("_", "-")
+        property_ = _key_to_html_property(key)
         if isinstance(values, (list, tuple)):
             wrap = values
         else:
@@ -46,7 +54,7 @@ def css_style(
     **kwargs: TagArg | list[TagArg] | tuple[TagArg, ...]
 ) -> list[str]:
     """Return css style block"""
-    return [f"{prop};" for prop in _process_properties(kwargs)]
+    return [f"{prop};" for prop in _generate_css_declarations(kwargs)]
 
 
 def css(
@@ -61,10 +69,12 @@ def css(
     return f"{selector} {{\n{properties}\n}}"
 
 
-def _process_tag_args(args: dict[str, TagArg]) -> Generator[str, None, None]:
+def _generate_html_attributes(
+    args: dict[str, TagArg]
+) -> Generator[str, None, None]:
     """Remove trailing underscores for arguments"""
     for name, value in args.items():
-        key = name.removesuffix("_").replace("_", "-")
+        key = _key_to_html_property(name)
         yield f'{key}="{value}"'
 
 
@@ -72,7 +82,7 @@ def tag(type_: str, /, **kwargs: TagArg) -> str:
     """Return HTML tag. Removes trailing underscore from argument names."""
     args = ""
     if kwargs:
-        args = " " + " ".join(_process_tag_args(kwargs))
+        args = " " + " ".join(_generate_html_attributes(kwargs))
     return f"<{type_}{args}>"
 
 
@@ -203,7 +213,10 @@ def input_field(
     field_type: str = "text",
     attrs: dict[str, TagArg] | None = None,
 ) -> str:
-    """Create input field"""
+    """Generate HTML input field
+
+    If any attribute from attrs conflicts with an attribute defined from
+    other parameters, a ValueError is raised"""
     lines = []
     args: dict[str, TagArg] = {
         "type": field_type,
@@ -215,8 +228,13 @@ def input_field(
         del args["type"]
     if attrs is not None:
         for key, value in attrs.items():
-            if not key.removesuffix("_") in args:
-                args[key] = value
+            property_ = _key_to_html_property(key)
+            if property_ not in args:
+                args[property_] = value
+            else:
+                raise ValueError(
+                    f"Attribute {key!r} conflicts with an internal attribute"
+                )
     if field_title is not None:
         lines.append(wrap_tag("label", field_title, False, for_=field_id))
     lines.append(tag("input", **args))
@@ -248,8 +266,36 @@ def form(
     submit_display: str,
     form_title: str | None = None,
 ) -> str:
-    """Return HTML form"""
-    submit = tag("input", type_="submit", value=submit_display)
+    """Return an HTML form.
+
+    This function generates an HTML form with the specified `form_id` and
+    `contents`, along with a submit button with the text `submit_display`.
+    If `form_title` is provided, the function generates a bolded title
+    for the form.
+
+    Args:
+        form_id: A string specifying the ID of the form.
+        contents: A string containing the contents of the form, including input
+            fields, text, and or other HTML elements.
+        submit_display: A string specifying the text to display on the submit
+            button for the form.
+        form_title: An optional string specifying the title of the form.
+
+    Returns:
+        A string containing the HTML for the generated form.
+
+    Raises:
+        TypeError: If `form_id`, `contents`, or `submit_display` are not
+            strings.
+    """
+    submit = input_field(
+        f"{form_id}_submit_button",
+        None,
+        field_type="submit",
+        attrs={
+            "value": submit_display,
+        },
+    )
     html = f"""{contents}
 <br>
 {submit}"""

@@ -1,6 +1,7 @@
 """Security functions like hashing passwords"""
 
 import base64
+import hmac
 import secrets
 import time
 from functools import wraps
@@ -102,6 +103,14 @@ def compare_hash_time_attackable(
         password, database_value, pepper
     )
     return recorded == new_hash
+
+
+def compare_hash_sync(password: str, database_value: str, pepper: str) -> bool:
+    """Compare password and database value in a constant amount of time"""
+    recorded, new_hash = get_password_hash_for_compare(
+        password, database_value, pepper
+    )
+    return hmac.compare_digest(recorded, new_hash)
 
 
 async def compare_hash(
