@@ -1,0 +1,63 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login</title>
+    <style>
+      * {
+        font-family: "Lucida Console";
+        box-sizing: border-box;
+      }
+      h1, footer {
+        text-align: center;
+      }
+      html, body {
+        height: 100%;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      .content {
+        flex: 1 0 auto;
+      }
+      .footer {
+        flex-shrink: 0;
+      }
+      code {
+        padding: .2em .4em;
+        background-color: rgba(158,167,179,0.4);
+        border-radius: 6px;
+        font-family: "SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace";
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="content">
+      <h1>Login</h1>
+      <div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px; display: inline-block;">
+        <b>Login</b>
+        <form name="login" method="post">
+          <label for="username">Username:</label>
+          <input id="username" name="username" placeholder="Username"><br>
+          <label for="password">Password:</label>
+          <input type="password" id="password" name="password" placeholder="Password">
+          <br>
+          <input type="submit" id="login_submit_button" name="login_submit_button" value="Sign In">
+        </form>
+      </div><br>
+      <ul>
+        <li><a href="/signup">Don't have an account?</a></li>
+      </ul>
+    </div>
+    <footer>
+      <i>If you're reading this, the web server was installed correctly.™</i>
+      <hr>
+      <p>
+        Caught In the Act Server v0.0.0 © CSHS Members
+      </p>
+    </footer>
+  </body>
+</html>

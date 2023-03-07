@@ -182,7 +182,11 @@ def template(
     )
 
 
-app: Final = QuartTrio(__name__)  # pylint: disable=invalid-name
+app: Final = QuartTrio(
+    __name__,
+    static_folder="static",
+    template_folder="templates",
+)  # pylint: disable=invalid-name
 AuthManager(app)
 
 
@@ -261,6 +265,15 @@ def login_require_only(
         return cast(Handler, wrapper)
 
     return get_wrapper
+
+
+def save_template(name: str, content: str) -> None:
+    """Save content as new template "{name}" """
+    assert app.template_folder is not None
+    template_path = app.template_folder / f'{name}.html.jinja'
+    with open(template_path, 'w', encoding="utf-8") as template_file:
+        template_file.write(content)
+    print(f'Saved content to {template_path}')
 
 
 def get_exception_page(code: int, name: str, desc: str) -> Response:
@@ -758,7 +771,7 @@ async def subtract_tickets_get() -> str:
         "add-tickets", contents, "Submit", "Subtract Student Ticket(s)"
     )
     body = htmlgen.contain_in_box(form)
-    return template("Subtrackt Tickets From Student", body)
+    return template("Subtract Tickets From Student", body)
 
 
 @app.post("/subtract-tickets")

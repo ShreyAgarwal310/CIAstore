@@ -1,0 +1,70 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Created New Account!</title>
+    <style>
+      * {
+        font-family: "Lucida Console";
+        box-sizing: border-box;
+      }
+      h1, footer {
+        text-align: center;
+      }
+      html, body {
+        height: 100%;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      .content {
+        flex: 1 0 auto;
+      }
+      .footer {
+        flex-shrink: 0;
+      }
+      code {
+        padding: .2em .4em;
+        background-color: rgba(158,167,179,0.4);
+        border-radius: 6px;
+        font-family: "SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace";
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="content">
+      <h1>Created New Account!</h1>
+      <p>Created new account with login credentials:</p>
+      <div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px; display: inline-block;">
+        Username: <code>{{ new_account_username }}</code>
+        <br>
+        Password: <code>{{ password }}</code>
+      </div>
+      <br>
+      <i>Password can be changed in settings later</i>
+      <br>
+      <br>
+      <strong>Please write this down, it will not be viewable again!</strong>
+      <br>
+      <br>
+      <p>Links:</p>
+      <ul>
+        <li><a href="/">Return to main page</a></li>
+        <li><a href="/logout">Log Out</a></li>
+        <li><a href="/settings">Account Settings</a></li>
+        <li><a href="/add-tickets">Add Tickets for Student</a></li>
+        <li><a href="/invite-teacher">Invite Another Teacher</a></li>
+      </ul>
+    </div>
+    <footer>
+      <i>If you're reading this, the web server was installed correctly.™</i>
+      <hr>
+      <p>
+        Caught In the Act Server v0.0.0 © CSHS Members
+      </p>
+    </footer>
+  </body>
+</html>
