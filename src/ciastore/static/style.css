@@ -1,0 +1,123 @@
+@font-face {
+    font-family: Nunito Sans;
+    src: url(../static/NunitoSans-Regular.ttf);
+}
+@font-face {
+    font-family: Tilt Warp;
+    src: url(../static/TiltWarp-Regular.ttf);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+* {
+  font-family: Nunito Sans;
+  margin: 0;
+  /*color: #152287;*/
+
+}
+h1{
+    font-family: Tilt Warp;
+    color: #152287;
+}
+h1, footer {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+html, body {
+  height: 100%;
+}
+body {
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  background-color: #6bdaff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+input, button, textarea, select {
+  font: inherit;
+}
+p, h1, h2, h3, h4, h5, h6 {
+  overflow-wrap: break-word;
+}
+#root, #__next {
+  isolation: isolate;
+}
+.content {
+    width:100%;
+  flex: 1 0 auto;
+   display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.footer {
+  flex-shrink: 0;
+}
+::placeholder {
+  font-style: italic;
+}
+code {
+  padding: 0.2em 0.4em;
+  background-color: rgba(158, 167, 179, 0.4);
+  border-radius: 6px;
+  font-family: "SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace";
+  line-height: 1.5;
+}
+
+
+body {
+  overflow: hidden;
+  justify-content: center;
+}
+
+div:not(.content){
+  background-color: white;
+  padding-left: 2%;
+  padding-right: 2%;
+  padding-bottom: 2%;
+  border-radius: 10px;
+  border: 2px solid #ebebeb;
+  margin: 4px;
+  text-align: justify;
+  align-items: center;
+}
+label {
+  margin-top: 20px;
+  display: block;
+}
+input{
+  width:100%;
+}
+#noticeText{
+    font-size:10px;
+    display: inline-block;
+    white-space:nowrap;
+}
+input[type="submit"] {
+  background-color: #152287;
+  color: #ffffff;
+  border: 2px solid black;
+  border-radius: 5px;
+  margin-top: 20px;
+  min-width: min-content;
+  height: 30px;
+}
+
+input[type="submit"]:hover{
+  background-color: #152287b0;
+
+}
+/*vv Makes it look good on phone vv*/
+@media screen and (max-width: 480px) {
+  div:not(.content){
+    min-width: 75% ;
+    padding-bottom:5%;
+  }
+}
+

@@ -112,36 +112,39 @@ def template(
     mono = "SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace"
     head_data = "\n".join(
         (
-            htmlgen.wrap_tag(
-                "style",
-                "\n".join(
-                    (
-                        htmlgen.css(
-                            "*",
-                            font_family="Lucida Console",
-                            box_sizing="border-box",
-                        ),
-                        htmlgen.css(("h1", "footer"), text_align="center"),
-                        htmlgen.css(("html", "body"), height="100%"),
-                        htmlgen.css(
-                            "body", display="flex", flex_direction="column"
-                        ),
-                        htmlgen.css(".content", flex=(1, 0, "auto")),
-                        htmlgen.css(
-                            ".footer",
-                            flex_shrink=0,
-                        ),
-                        htmlgen.css(
-                            "code",
-                            padding=(".2em", ".4em"),
-                            background_color="rgba(158,167,179,0.4)",
-                            border_radius="6px",
-                            font_family=mono,
-                            line_height=1.5,
-                        ),
-                    )
-                ),
+            htmlgen.tag(
+                "link", rel="stylesheet", type_="text/css", href="style.css"
             ),
+            #             htmlgen.wrap_tag(
+            #                "style",
+            #                "\n".join(
+            #                    (
+            #                        htmlgen.css(
+            #                            "*",
+            #                            font_family="Lucida Console",
+            #                            box_sizing="border-box",
+            #                        ),
+            #                        htmlgen.css(("h1", "footer"), text_align="center"),
+            #                        htmlgen.css(("html", "body"), height="100%"),
+            #                        htmlgen.css(
+            #                            "body", display="flex", flex_direction="column"
+            #                        ),
+            #                        htmlgen.css(".content", flex=(1, 0, "auto")),
+            #                        htmlgen.css(
+            #                            ".footer",
+            #                            flex_shrink=0,
+            #                        ),
+            #                        htmlgen.css(
+            #                            "code",
+            #                            padding=(".2em", ".4em"),
+            #                            background_color="rgba(158,167,179,0.4)",
+            #                            border_radius="6px",
+            #                            font_family=mono,
+            #                            line_height=1.5,
+            #                        ),
+            #                    )
+            #                ),
+            #            ),
             head,
         )
     )
@@ -450,7 +453,7 @@ async def convert_joining(code: str) -> bool:
 #        )
 #    )
 #
-#    form = htmlgen.form("signup", contents, "Sign up", "Sign up")
+#    form = htmlgen.form("signup", contents, "Sign up")
 #    body = "<br>\n".join(
 #        (
 #            htmlgen.contain_in_box(form),
@@ -575,7 +578,7 @@ async def login_get() -> str:
 #       )
 #   )
 #
-#   form = htmlgen.form("login", contents, "Sign In", "Login")
+#   form = htmlgen.form("login", contents, "Sign In")
 #   body = "<br>\n".join(
 #       (
 #           htmlgen.contain_in_box(form),
@@ -693,7 +696,7 @@ async def add_tickets_get() -> str:
 #       )
 #   )
 #   form = htmlgen.form(
-#       "add-tickets", contents, "Submit", "Give Student Ticket(s)"
+#       "add-tickets", contents, "Submit"
 #   )
 #   body = htmlgen.contain_in_box(form)
 #   return template("Add Tickets For Student", body)
@@ -788,7 +791,7 @@ async def subtract_tickets_get() -> str:
 #       )
 #   )
 #   form = htmlgen.form(
-#       "add-tickets", contents, "Submit", "Subtract Student Ticket(s)"
+#       "add-tickets", contents, "Submit"
 #   )
 #   body = htmlgen.contain_in_box(form)
 #   return template("Subtract Tickets From Student", body)
@@ -923,7 +926,6 @@ async def settings_password_get() -> str:
 #       "change_password",
 #       contents,
 #       "Change Password",
-#       "Change Account Password",
 #   )
 #   body = "\n".join(
 #       (
@@ -1035,7 +1037,6 @@ async def invite_teacher_get() -> str:
 #       "invite-teacher",
 #       contents,
 #       "Create New Account",
-#       "Create a teacher account",
 #   )
 #   body = "\n".join(
 #       (
@@ -1183,7 +1184,6 @@ async def invite_manager_get() -> str:
 #       "invite-manager",
 #       contents,
 #       "Create New Account",
-#       "Create a manager account",
 #   )
 #   body = "\n".join(
 #       (
@@ -1324,7 +1324,7 @@ async def ticket_get_form() -> str:
 #   )
 #
 #   form = htmlgen.form(
-#       "get_student_id", contents, "Display Tickets", "Enter Student ID"
+#       "get_student_id", contents, "Display Tickets",
 #   )
 #
 #   body = "\n".join(

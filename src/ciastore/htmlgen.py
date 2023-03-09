@@ -160,15 +160,16 @@ def contain_in_box(inside: str, name: str | None = None) -> str:
     return wrap_tag(
         "div",
         inside,
-        style=" ".join(
-            css_style(
-                background_color="ghostwhite",
-                padding="2px",
-                border=("2px", "solid", "lightgray"),
-                margin="4px",
-                display="inline-block",
-            )
-        ),
+        class_="box",
+        ##        style=" ".join(
+        ##            css_style(
+        ##                background_color="ghostwhite",
+        ##                padding="2px",
+        ##                border=("2px", "solid", "lightgray"),
+        ##                margin="4px",
+        ##                display="inline-block",
+        ##            )
+        ##        ),
     )
 
 
