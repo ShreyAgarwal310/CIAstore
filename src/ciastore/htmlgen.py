@@ -53,8 +53,18 @@ def _generate_css_declarations(
 def css_style(
     **kwargs: TagArg | list[TagArg] | tuple[TagArg, ...]
 ) -> list[str]:
-    """Return css style block"""
+    """Return CSS style data"""
     return [f"{prop};" for prop in _generate_css_declarations(kwargs)]
+
+
+def css_block(
+    selector: str | list[str] | tuple[str, ...], content: str
+) -> str:
+    """Return CSS block"""
+    if isinstance(selector, (list, tuple)):
+        selector = ", ".join(selector)
+    properties = indent(2, content)
+    return f"{selector} {{\n{properties}\n}}"
 
 
 def css(
@@ -63,10 +73,8 @@ def css(
     **kwargs: TagArg | list[TagArg] | tuple[TagArg, ...],
 ) -> str:
     """Return CSS block"""
-    if isinstance(selector, (list, tuple)):
-        selector = ", ".join(selector)
-    properties = indent(2, "\n".join(css_style(**kwargs)))
-    return f"{selector} {{\n{properties}\n}}"
+    properties = "\n".join(css_style(**kwargs))
+    return css_block(selector, properties)
 
 
 def _generate_html_attributes(
@@ -161,15 +169,6 @@ def contain_in_box(inside: str, name: str | None = None) -> str:
         "div",
         inside,
         class_="box",
-        ##        style=" ".join(
-        ##            css_style(
-        ##                background_color="ghostwhite",
-        ##                padding="2px",
-        ##                border=("2px", "solid", "lightgray"),
-        ##                margin="4px",
-        ##                display="inline-block",
-        ##            )
-        ##        ),
     )
 
 
@@ -304,3 +303,49 @@ def form(
     if form_title is not None:
         title = wrap_tag("b", form_title, block=False) + "\n"
     return title + wrap_tag("form", html, True, name=form_id, method="post")
+
+
+def jinja_statement(value: str) -> str:
+    """Wrap value in jinja statement block"""
+    return f"{{% {value} %}}"
+
+
+def jinja_expression(value: str) -> str:
+    """Wrap value in jinja expression block"""
+    return f"{{{{ {value} }}}}"
+
+
+def jinja_comment(value: str) -> str:
+    """Wrap value in jinja comment block"""
+    return f"{{# {value} #}}"
+
+
+def jinja_if_block(conditions: dict[str, str]) -> str:
+    """Generate jinja if / if else block from dictionary
+
+    Keys are conditions to check, values are content if true"""
+    contents = []
+    count = 0
+    has_else = False
+    for condition, content in conditions.items():
+        statement = "if" if count == 0 else "elif"
+        cond = ""
+        if condition:
+            if has_else:
+                raise ValueError("Found condition after else block defined")
+            cond = f" {condition}"
+        else:
+            if not count:
+                raise ValueError(
+                    "There must be at least one condition for there to be an "
+                    "else block"
+                )
+            has_else = True
+            # because of how dictionaries work it should not be possible
+            # for there to be more than one key matching ""
+            statement = "else"
+        contents.append(jinja_statement(f"{statement}{cond}"))
+        contents.append(content)
+        count += 1
+    contents.append(jinja_statement("endif"))
+    return "\n".join(contents)

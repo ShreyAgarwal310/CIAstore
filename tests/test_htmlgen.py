@@ -38,10 +38,27 @@ def test_css_style() -> None:
     ) == ["value: seven;", 'property-with-should-be-dash: "space value";']
 
 
+def test_css_block() -> None:
+    assert htmlgen.css_block("*", "content") == "* {\n  content\n}"
+
+
+def test_css_multi_select() -> None:
+    assert (
+        htmlgen.css_block(("*", "*::"), "content") == "*, *:: {\n  content\n}"
+    )
+
+
 def test_css() -> None:
     assert (
         htmlgen.css(("h1", "footer"), text_align="center")
         == "h1, footer {\n  text-align: center;\n}"
+    )
+
+
+def test_css_multi() -> None:
+    assert (
+        htmlgen.css(("h1", "footer"), text_align=("center", "left"))
+        == "h1, footer {\n  text-align: center left;\n}"
     )
 
 
@@ -136,7 +153,7 @@ def test_template_no_tag() -> None:
 def test_contain_in_box_none() -> None:
     assert (
         htmlgen.contain_in_box("inside woo")
-        == """<div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px; display: inline-block;">
+        == """<div class="box">
   inside woo
 </div>"""
     )
@@ -145,7 +162,7 @@ def test_contain_in_box_none() -> None:
 def test_contain_in_box_named() -> None:
     assert (
         htmlgen.contain_in_box("inside different", "Names here")
-        == """<div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px; display: inline-block;">
+        == """<div class="box">
   <span>
     Names here
   </span>
@@ -186,7 +203,7 @@ def test_radio_select_box() -> None:
         htmlgen.radio_select_box(
             "name_here", {"cat": "seven"}, box_title="click to add title"
         )
-        == """<div style="background-color: ghostwhite; padding: 2px; border: 2px solid lightgray; margin: 4px; display: inline-block;">
+        == """<div class="box">
   <span>
     click to add title
   </span>
@@ -285,4 +302,38 @@ def test_form_no_title() -> None:
   <br>
   <input type="submit" id="form_id_submit_button" name="form_id_submit_button" value="hihi">
 </form>"""
+    )
+
+
+def test_jinja_statement() -> None:
+    assert htmlgen.jinja_statement("jinja exp") == "{% jinja exp %}"
+
+
+def test_jinja_expression() -> None:
+    assert htmlgen.jinja_expression("username") == "{{ username }}"
+
+
+def test_jinja_comment() -> None:
+    assert htmlgen.jinja_comment("comment") == "{# comment #}"
+
+
+def test_jinja_if_block() -> None:
+    assert (
+        htmlgen.jinja_if_block(
+            {
+                'name == "cat"': "Hallos cat",
+                'name == "fish"': "hallos fish",
+                "name in users": "hallos user",
+                "": "yay newfrien",
+            }
+        )
+        == """{% if name == "cat" %}
+Hallos cat
+{% elif name == "fish" %}
+hallos fish
+{% elif name in users %}
+hallos user
+{% else %}
+yay newfrien
+{% endif %}"""
     )

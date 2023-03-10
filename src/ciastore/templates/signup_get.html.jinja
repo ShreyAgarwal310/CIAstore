@@ -3,24 +3,25 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="style.css">
-    <title>Login</title>
+    <title>Sign up</title>
+    <link rel="stylesheet" type="text/css" href="/style.css">
   </head>
   <body>
     <div class="content">
-      <h1>Login</h1>
+      <h1>Sign up</h1>
       <div class="box">
-        <form name="login" method="post">
+        <form name="signup" method="post">
           <label for="username">Username:</label>
-          <input id="username" name="username" placeholder="Username"><br>
+          <input id="username" name="username" placeholder="Your LPS ID" autofocus="" required=""><br>
           <label for="password">Password:</label>
-          <input type="password" id="password" name="password" placeholder="Password">
+          <input type="password" id="password" name="password" placeholder="Secure password" required="">
           <br>
-          <input type="submit" id="login_submit_button" name="login_submit_button" value="Sign In">
+          <input type="submit" id="signup_submit_button" name="signup_submit_button" value="Sign up">
         </form>
       </div><br>
+      <i>Password needs at least 7 different characters</i><br>
       <ul>
-        <li><a href="/signup">Don't have an account?</a></li>
+        <li><a href="/login">Already have an account?</a></li>
       </ul>
     </div>
     <footer>

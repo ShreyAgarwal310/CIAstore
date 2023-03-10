@@ -19,22 +19,25 @@ import time
 import warnings
 from os import getenv, makedirs, path
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Final, TypeVar, cast
+from typing import (Any, AsyncIterator, Awaitable, Callable, Final, TypeVar,
+                    cast)
 from urllib.parse import urlencode
 
 import trio
 from dotenv import load_dotenv
 from hypercorn.config import Config
 from hypercorn.trio import serve
+from jinja2 import Template
 from quart import Response, request
-from quart.templating import render_template
+from quart.templating import render_template as quart_render_template
+from quart.templating import stream_template as quart_stream_template
 from quart_auth import (AuthManager, AuthUser, Unauthorized, current_user,
                         login_required, login_user, logout_user)
 from quart_trio import QuartTrio
 from werkzeug import Response as wkresp
 from werkzeug.exceptions import HTTPException
 
-from ciastore import database, elapsed, htmlgen, security
+from ciastore import database, elapsed, security
 
 # import uuid
 
@@ -98,92 +101,6 @@ def find_ip() -> str:
         candidates.append(ip_addr)
 
     return candidates[0]
-
-
-def template(
-    title: str,
-    body: str,
-    *,
-    head: str = "",
-    body_tag: dict[str, htmlgen.TagArg] | None = None,
-    lang: str = "en",
-) -> str:
-    """HTML Template for application"""
-    mono = "SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace"
-    head_data = "\n".join(
-        (
-            htmlgen.tag(
-                "link", rel="stylesheet", type_="text/css", href="style.css"
-            ),
-            #             htmlgen.wrap_tag(
-            #                "style",
-            #                "\n".join(
-            #                    (
-            #                        htmlgen.css(
-            #                            "*",
-            #                            font_family="Lucida Console",
-            #                            box_sizing="border-box",
-            #                        ),
-            #                        htmlgen.css(("h1", "footer"), text_align="center"),
-            #                        htmlgen.css(("html", "body"), height="100%"),
-            #                        htmlgen.css(
-            #                            "body", display="flex", flex_direction="column"
-            #                        ),
-            #                        htmlgen.css(".content", flex=(1, 0, "auto")),
-            #                        htmlgen.css(
-            #                            ".footer",
-            #                            flex_shrink=0,
-            #                        ),
-            #                        htmlgen.css(
-            #                            "code",
-            #                            padding=(".2em", ".4em"),
-            #                            background_color="rgba(158,167,179,0.4)",
-            #                            border_radius="6px",
-            #                            font_family=mono,
-            #                            line_height=1.5,
-            #                        ),
-            #                    )
-            #                ),
-            #            ),
-            head,
-        )
-    )
-
-    join_body = (
-        htmlgen.wrap_tag("h1", title, False),
-        body,
-    )
-
-    body_data = "\n".join(
-        (
-            htmlgen.wrap_tag(
-                "div",
-                "\n".join(join_body),
-                class_="content",
-            ),
-            htmlgen.wrap_tag(
-                "footer",
-                "\n".join(
-                    (
-                        htmlgen.wrap_tag(
-                            "i",
-                            "If you're reading this, the web server "
-                            "was installed correctly.™",
-                            block=False,
-                        ),
-                        htmlgen.tag("hr"),
-                        htmlgen.wrap_tag(
-                            "p", f"{__title__} v{__version__} © {__author__}"
-                        ),
-                    )
-                ),
-            ),
-        )
-    )
-
-    return htmlgen.template(
-        title, body_data, head=head_data, body_tag=body_tag, lang=lang
-    )
 
 
 app: Final = QuartTrio(
@@ -271,13 +188,54 @@ def login_require_only(
     return get_wrapper
 
 
-def save_template(name: str, content: str) -> None:
-    """Save content as new template "{name}" """
-    assert app.template_folder is not None
-    template_path = app.template_folder / f"{name}.html.jinja"
-    with open(template_path, "w", encoding="utf-8") as template_file:
-        template_file.write(content)
-    print(f"Saved content to {template_path}")
+async def render_template(
+    template_name_or_list: str | list[str], **context: Any
+) -> str:
+    """Render the template with the context given.
+
+    Arguments:
+        template_name_or_list: Template name to render of a list of
+            possible template names.
+        context: The variables to pass to the template.
+
+    Patched to remove blank lines left by jinja statements"""
+    content = await quart_render_template(template_name_or_list, **context)
+    new_content = []
+    for line in content.splitlines():
+        new_line = line.rstrip()
+        if not new_line:
+            continue
+        new_content.append(new_line)
+    return "\n".join(new_content)
+
+
+async def stream_template(
+    template_name_or_list: str | Template | list[str | Template],
+    **context: Any,
+) -> str:
+    """Render a template by name with the given context as a stream.
+
+    This returns an iterator of strings, which can be used as a
+    streaming response from a view.
+
+    Arguments:
+        template_name_or_list: The name of the template to render. If a
+            list is given, the first name to exist will be rendered.
+        context: The variables to make available in the template.
+
+    Patched to remove blank lines left by jinja statements"""
+
+    async def generate() -> AsyncIterator[str]:
+        generator = await quart_stream_template(
+            template_name_or_list, **context
+        )
+        async for chunk in generator:
+            for line in chunk.splitlines(True):
+                if not line.rstrip():
+                    continue
+                yield line
+
+    return "".join([x async for x in generate()])
 
 
 async def get_exception_page(code: int, name: str, desc: str) -> Response:
@@ -429,47 +387,9 @@ async def convert_joining(code: str) -> bool:
 #        if success:
 #            return app.redirect("/")
 #        return app.redirect("/signup#codeinvalid")
-#
-#    contents = "<br>\n".join(
-#        (
-#            htmlgen.input_field(
-#                "username",
-#                "Username:",
-#                attrs={
-#                    "placeholder": "Your LPS ID",
-#                    "autofocus": "",
-#                    "required": "",
-#                },
-#            ),
-#            htmlgen.input_field(
-#                "password",
-#                "Password:",
-#                field_type="password",
-#                attrs={
-#                    "placeholder": "Secure password",
-#                    "required": "",
-#                },
-#            ),
-#        )
+#    return await stream_template(
+#        "signup_get.html.jinja",
 #    )
-#
-#    form = htmlgen.form("signup", contents, "Sign up")
-#    body = "<br>\n".join(
-#        (
-#            htmlgen.contain_in_box(form),
-#            htmlgen.wrap_tag(
-#                "i",
-#                "Password needs at least 7 different characters",
-#                block=False,
-#            ),
-#            htmlgen.link_list(
-#                {
-#                    "/login": "Already have an account?",
-#                }
-#            ),
-#        )
-#    )
-#    return template("Sign up", body)
 
 
 # @app.post("/signup")
@@ -548,49 +468,18 @@ async def convert_joining(code: str) -> bool:
 #        users.write_file()
 #        log(f"User {username!r} signed up")
 #
-#    text = (
-#        f"Sent an email to {email} containing "
-#        + "your a link to verify your account."
+#    return await stream_template(
+#        "signup_post.html.jinja",
+#        email=email,
 #    )
-#    body = htmlgen.wrap_tag("p", text, False)
-#    return template("Check your email", body)
 
 
 @app.get("/login")
 async def login_get() -> str:
     """Get login page"""
-    return await render_template("login.html.jinja")
-
-
-#   contents = "<br>\n".join(
-#       (
-#           htmlgen.input_field(
-#               "username",
-#               "Username:",
-#               attrs={"placeholder": "Username"},
-#           ),
-#           htmlgen.input_field(
-#               "password",
-#               "Password:",
-#               field_type="password",
-#               attrs={"placeholder": "Password"},
-#           ),
-#       )
-#   )
-#
-#   form = htmlgen.form("login", contents, "Sign In")
-#   body = "<br>\n".join(
-#       (
-#           htmlgen.contain_in_box(form),
-#           htmlgen.link_list(
-#               {
-#                   "/signup": "Don't have an account?",
-#                   # "/forgot": "Forgot password?",
-#               }
-#           ),
-#       )
-#   )
-#   return template("Login", body)
+    return await stream_template(
+        "login_get.html.jinja",
+    )
 
 
 @app.post("/login")
@@ -666,40 +555,9 @@ async def user_data_route() -> wkresp | Response:
 @login_require_only(type_={"teacher", "manager"})
 async def add_tickets_get() -> str:
     """Add tickets page for teachers"""
-    return await render_template("add_tickets_get.html.jinja")
-
-
-#   contents = "<br>\n".join(
-#       (
-#           htmlgen.input_field(
-#               "id",
-#               "Student ID Number",
-#               field_type="text",
-#               attrs={
-#                   "autofocus": "",
-#                   "required": "",
-#                   "placeholder": "LPS Student ID",
-#                   "pattern": "[0-9]{6}",
-#               },
-#           ),
-#           htmlgen.input_field(
-#               "ticket_count",
-#               "Number of Tickets",
-#               field_type="number",
-#               attrs={
-#                   "required": "",
-#                   "value": 1,
-#                   "min": 1,
-#                   "max": 10,
-#               },
-#           ),
-#       )
-#   )
-#   form = htmlgen.form(
-#       "add-tickets", contents, "Submit"
-#   )
-#   body = htmlgen.contain_in_box(form)
-#   return template("Add Tickets For Student", body)
+    return await stream_template(
+        "add_tickets_get.html.jinja",
+    )
 
 
 @app.post("/add-tickets")
@@ -725,7 +583,7 @@ async def add_tickets_post() -> str | wkresp:
     add_tickets_to_user(student_id, ticket_count)
 
     plural = "" if ticket_count < 2 else "s"
-    return await render_template(
+    return await stream_template(
         "add_tickets_post.html.jinja",
         ticket_count=ticket_count,
         plural=plural,
@@ -733,68 +591,14 @@ async def add_tickets_post() -> str | wkresp:
     )
 
 
-#   body = "\n".join(
-#       (
-#           htmlgen.contain_in_box(
-#               htmlgen.wrap_tag(
-#                   "p",
-#                   f"Added {ticket_count} ticket{plural} for {student_id}",
-#                   block=False,
-#               )
-#           ),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#                   "/logout": "Log Out",
-#               }
-#           ),
-#       )
-#   )
-#   return template("Added Tickets", body)
-
-
 @app.get("/subtract-tickets")
 @pretty_exception
 @login_require_only(type_="manager")
 async def subtract_tickets_get() -> str:
     """Subtract tickets page for managers"""
-    return await render_template("subtract_tickets_get.html.jinja")
-
-
-#   contents = "<br>\n".join(
-#       (
-#           htmlgen.input_field(
-#               "id",
-#               "Student ID Number",
-#               field_type="text",
-#               attrs={
-#                   "autofocus": "",
-#                   "required": "",
-#                   "placeholder": "LPS Student ID",
-#                   "pattern": "[0-9]{6}",
-#               },
-#           ),
-#           htmlgen.input_field(
-#               "ticket_count",
-#               "Number of Tickets",
-#               field_type="number",
-#               attrs={
-#                   "required": "",
-#                   "value": 1,
-#                   "min": 1,
-#                   "max": 100,
-#               },
-#           ),
-#       )
-#   )
-#   form = htmlgen.form(
-#       "add-tickets", contents, "Submit"
-#   )
-#   body = htmlgen.contain_in_box(form)
-#   return template("Subtract Tickets From Student", body)
+    return await stream_template(
+        "subtract_tickets_get.html.jinja",
+    )
 
 
 @app.post("/subtract-tickets")
@@ -815,19 +619,19 @@ async def subtract_tickets_post() -> wkresp | str:
         if ticket_count < 1 or ticket_count > 100:
             raise ValueError
     except ValueError:
-        return app.redirect("/add-tickets#badcount")
+        return app.redirect("/subtract-tickets#badcount")
 
     try:
         tickets_left = subtract_user_tickets(student_id, ticket_count)
     except LookupError:
         # Username not exist
-        return app.redirect("/add-tickets#student-not-found")
+        return app.redirect("/subtract-tickets#student-not-found")
     except ValueError:
         # Count > number of tickets in account
-        return app.redirect("/add-tickets#not-enough-tickets")
+        return app.redirect("/subtract-tickets#not-enough-tickets")
 
     plural = "" if ticket_count < 2 else "s"
-    return await render_template(
+    return await stream_template(
         "subtract_tickets_post.html.jinja",
         ticket_count=ticket_count,
         plural=plural,
@@ -836,113 +640,24 @@ async def subtract_tickets_post() -> wkresp | str:
     )
 
 
-#   body = "\n".join(
-#       (
-#           htmlgen.contain_in_box(
-#               htmlgen.wrap_tag(
-#                   "p",
-#                   f"Subtracted {ticket_count} ticket{plural} "
-#                   f"from {student_id}. They now have {tickets_left} tickets",
-#                   block=False,
-#               )
-#           ),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#                   "/logout": "Log Out",
-#               }
-#           ),
-#       )
-#   )
-#   return template("Subtracted Tickets", body)
-
-
 @app.get("/settings")
 @pretty_exception
 @login_required
 async def settings_get() -> str:
     """Settings page get request"""
-    return await render_template(
-        "settings.html.jinja",
+    return await stream_template(
+        "settings_get.html.jinja",
     )
-
-
-#   links = {
-#       "/settings/change-password": "Change Password",
-#   }
-#   body = "\n".join(
-#       (
-#           htmlgen.link_list(links),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#                   "/logout": "Log Out",
-#               }
-#           ),
-#       )
-#   )
-#   return template("User Settings", body)
 
 
 @app.get("/settings/change-password")
 @pretty_exception
 @login_required
-async def settings_password_get() -> str:
+async def settings_change_password_get() -> str:
     """Setting page for password change get"""
-    return await render_template(
-        "settings-change_password_get.html.jinja",
+    return await stream_template(
+        "settings_change_password_get.html.jinja",
     )
-
-
-#   contents = "<br>\n".join(
-#       (
-#           htmlgen.input_field(
-#               "current_password",
-#               "Current Password:",
-#               field_type="password",
-#               attrs={
-#                   "placeholder": "Your current password",
-#                   "required": "",
-#               },
-#           ),
-#           htmlgen.input_field(
-#               "new_password",
-#               "New Password:",
-#               field_type="password",
-#               attrs={
-#                   "placeholder": "New secure password",
-#                   "required": "",
-#               },
-#           ),
-#       )
-#   )
-#   form = htmlgen.form(
-#       "change_password",
-#       contents,
-#       "Change Password",
-#   )
-#   body = "\n".join(
-#       (
-#           htmlgen.contain_in_box(form),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#                   "/logout": "Log Out",
-#                   "/settings": "All Account Settings",
-#               }
-#           ),
-#       )
-#   )
-#   return template("Change Password", body)
 
 
 @app.post("/settings/change-password")
@@ -983,29 +698,9 @@ async def settings_password_post() -> wkresp | str:
     users.write_file()
     log(f"{username!r} changed their password")
 
-    return await render_template(
-        "settings-change_password_post.html.jinja",
+    return await stream_template(
+        "settings_change_password_post.html.jinja",
     )
-
-
-#   body = "\n".join(
-#       (
-#           htmlgen.wrap_tag(
-#               "p", "Password changed successfully", block=False
-#           ),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#                   "/logout": "Log Out",
-#                   "/settings": "All Account Settings",
-#               }
-#           ),
-#       )
-#   )
-#   return template("Password Changed", body)
 
 
 @app.get("/invite-teacher")
@@ -1013,48 +708,9 @@ async def settings_password_post() -> wkresp | str:
 @login_require_only(type_={"teacher", "manager"})
 async def invite_teacher_get() -> str:
     """Create new teacher account"""
-    return await render_template(
+    return await stream_template(
         "invite_teacher_get.html.jinja",
     )
-
-
-#   contents = "<br>\n".join(
-#       (
-#           htmlgen.input_field(
-#               "new_account_username",
-#               "New Account Username (3-16 lowercase characters)",
-#               attrs={
-#                   "autofocus": "",
-#                   "required": "",
-#                   "placeholder": "LPS Staff Username",
-#                   "pattern": "[a-z]{3,16}",
-#               },
-#           ),
-#           "",
-#       )
-#   )
-#   form = htmlgen.form(
-#       "invite-teacher",
-#       contents,
-#       "Create New Account",
-#   )
-#   body = "\n".join(
-#       (
-#           htmlgen.contain_in_box(form),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#                   "/logout": "Log Out",
-#                   "/settings": "Account Settings",
-#                   "/add-tickets": "Add Tickets for Student",
-#               }
-#           ),
-#       )
-#   )
-#   return template("Invite A Teacher", body)
 
 
 @app.post("/invite-teacher")
@@ -1095,64 +751,11 @@ async def invite_teacher_post() -> str | wkresp:
     creator_username = current_user.auth_id
     log(f"{creator_username!r} invited {new_account_username!r} as teacher")
 
-    return await render_template(
+    return await stream_template(
         "invite_teacher_post.html.jinja",
         new_account_username=new_account_username,
         password=password,
     )
-
-
-#   body = "\n".join(
-#       (
-#           htmlgen.wrap_tag(
-#               "p",
-#               "Created new account with login credentials:",
-#               block=False,
-#           ),
-#           htmlgen.contain_in_box(
-#               "".join(
-#                   (
-#                       "Username: ",
-#                       htmlgen.wrap_tag(
-#                           "code", new_account_username, block=False
-#                       ),
-#                       "\n",
-#                       htmlgen.tag("br"),
-#                       "\n",
-#                       "Password: ",
-#                       htmlgen.wrap_tag("code", password, block=False),
-#                   )
-#               )
-#           ),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag(
-#               "i",
-#               "Password can be changed in settings later",
-#               block=False,
-#           ),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag(
-#               "strong",
-#               "Please write this down, it will not be viewable again!",
-#               block=False,
-#           ),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#                   "/logout": "Log Out",
-#                   "/settings": "Account Settings",
-#                   "/add-tickets": "Add Tickets for Student",
-#                   "/invite-teacher": "Invite Another Teacher",
-#               }
-#           ),
-#       )
-#   )
-#
-#   return template("Created New Account!", body)
 
 
 @app.get("/invite-manager")
@@ -1160,48 +763,9 @@ async def invite_teacher_post() -> str | wkresp:
 @login_require_only(type_="manager")
 async def invite_manager_get() -> str:
     """Create a new manager account"""
-    return await render_template(
+    return await stream_template(
         "invite_manager_get.html.jinja",
     )
-
-
-#   contents = "<br>\n".join(
-#       (
-#           htmlgen.input_field(
-#               "new_account_username",
-#               "New Account Username (3-16 lowercase characters)",
-#               attrs={
-#                   "autofocus": "",
-#                   "required": "",
-#                   "placeholder": "LPS Staff Username",
-#                   "pattern": "[a-z]{3,16}",
-#               },
-#           ),
-#           "",
-#       )
-#   )
-#   form = htmlgen.form(
-#       "invite-manager",
-#       contents,
-#       "Create New Account",
-#   )
-#   body = "\n".join(
-#       (
-#           htmlgen.contain_in_box(form),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#                   "/logout": "Log Out",
-#                   "/settings": "Account Settings",
-#                   "/add-tickets": "Add Tickets for Student",
-#               }
-#           ),
-#       )
-#   )
-#   return template("Invite A Manager", body)
 
 
 @app.post("/invite-manager")
@@ -1242,103 +806,18 @@ async def invite_manager_post() -> wkresp | str:
     creator_username = current_user.auth_id
     log(f"{creator_username!r} invited {new_account_username!r} as manager")
 
-    return await render_template(
+    return await stream_template(
         "invite_manager_post.html.jinja",
         new_account_username=new_account_username,
         password=password,
     )
 
 
-#   body = "\n".join(
-#       (
-#           htmlgen.wrap_tag(
-#               "p",
-#               "Created new account with login credentials:",
-#               block=False,
-#           ),
-#           htmlgen.contain_in_box(
-#               "".join(
-#                   (
-#                       "Username: ",
-#                       htmlgen.wrap_tag(
-#                           "code", new_account_username, block=False
-#                       ),
-#                       "\n",
-#                       htmlgen.tag("br"),
-#                       "\n",
-#                       "Password: ",
-#                       htmlgen.wrap_tag("code", password, block=False),
-#                   )
-#               )
-#           ),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag(
-#               "i",
-#               "Password can be changed in settings later",
-#               block=False,
-#           ),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag(
-#               "strong",
-#               "Please write this down, it will not be viewable again!",
-#               block=False,
-#           ),
-#           htmlgen.tag("br"),
-#           htmlgen.tag("br"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#                   "/logout": "Log Out",
-#                   "/settings": "Account Settings",
-#                   "/add-tickets": "Add Tickets for Student",
-#                   "/invite-teacher": "Invite a Teacher",
-#                   "/invite-manager": "Invite Another Manager",
-#               }
-#           ),
-#       )
-#   )
-#
-#   return template("Created New Account!", body)
-
-
 async def ticket_get_form() -> str:
     """Generate form for ticket GET when no ID given"""
-    return await render_template(
+    return await stream_template(
         "ticket_get_form.html.jinja",
     )
-
-
-#   contents = "<br>\n".join(
-#       (
-#           htmlgen.input_field(
-#               "student_id",
-#               "Student ID:",
-#               attrs={
-#                   "placeholder": "Student ID Number",
-#                   "autocomplete": "off",
-#               },
-#           ),
-#       )
-#   )
-#
-#   form = htmlgen.form(
-#       "get_student_id", contents, "Display Tickets",
-#   )
-#
-#   body = "\n".join(
-#       (
-#           htmlgen.contain_in_box(form),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/": "Return to main page",
-#               }
-#           ),
-#       )
-#   )
-#   return template("Enter ID", body)
 
 
 async def ticket_count_page(username: str) -> str:
@@ -1348,33 +827,14 @@ async def ticket_count_page(username: str) -> str:
     except LookupError:
         count = 0
 
-    #   contents = htmlgen.wrap_tag(
-    #       "h3", f"{username!r} currently has {count!r} tickets", block=False
-    #   )
     user_link = app.url_for("tickets_get") + "?" + urlencode({"id": username})
 
-    return await render_template(
+    return await stream_template(
         "ticket_count.html.jinja",
-        username=username,
-        count=count,
+        username=repr(username),
+        count=repr(count),
         user_link=user_link,
     )
-
-
-#   body = "\n".join(
-#       (
-#           htmlgen.contain_in_box(contents),
-#           htmlgen.create_link(ref, "Link to this user"),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           htmlgen.link_list(
-#               {
-#                   "/tickets": "Display tickets for user",
-#                   "/": "Return to main page",
-#               }
-#           ),
-#       )
-#   )
-#   return template("Ticket Count", body)
 
 
 @app.get("/tickets")
@@ -1417,55 +877,23 @@ async def tickets_post() -> str | wkresp:
 async def root_get() -> str:
     """Main page GET request"""
 
-    username = ""
+    user_name = ""
+    user_type = ""
     if await current_user.is_authenticated:
         assert current_user.auth_id is not None
-        username = current_user.auth_id
+        user_name = current_user.auth_id
 
-    return await render_template(
-        "root.html.jinja",
-        username=username,
+        users = database.load(app.root_path / "records" / "users.json")
+        assert user_name in users
+        user = users[user_name]
+
+        user_type = user["type"]
+
+    return await stream_template(
+        "root_get.html.jinja",
+        user_name=user_name,
+        user_type=user_type,
     )
-
-
-#   if await current_user.is_authenticated:
-#       assert current_user.auth_id is not None
-#       username = current_user.auth_id
-#       status = f"Hello logged in user {current_user.auth_id}."
-#       links = {
-#           "/user_data": "[DEBUG] View user data",
-#           "/logout": "Log Out",
-#           "/settings": "Account Settings",
-#           "/tickets": "View ticket count",
-#       }
-#
-#       users = database.load(app.root_path / "records" / "users.json")
-#       assert current_user.auth_id in users
-#       user = users[current_user.auth_id]
-#       if user["type"] in {"teacher", "manager"}:
-#           links.update(
-#               {
-#                   "/add-tickets": "Add Tickets for Student",
-#                   "/invite-teacher": "Invite Teacher",
-#               }
-#           )
-#   else:
-#       login_link = htmlgen.create_link("/login", "this link")
-#       status = f"Please log in at {login_link}."
-#       links = {
-#           "/login": "Log In",
-#           "/signup": "Sign Up",
-#       }
-#   link_block = htmlgen.link_list(links)
-#   login_msg = htmlgen.wrap_tag("p", status)
-#   body = "\n".join(
-#       (
-#           htmlgen.contain_in_box(login_msg),
-#           htmlgen.wrap_tag("p", "Links:", block=False),
-#           link_block,
-#       )
-#   )
-#   return template("Caught In the Act", body)
 
 
 async def run_async(
@@ -1521,7 +949,7 @@ async def run_async(
         log(f"Cannot bind to IP address '{ip_addr}' port {port}", 1)
         sys.exit(1)
     except KeyboardInterrupt:
-        pass
+        log("Shutting down from keyboard interrupt")
 
 
 def run() -> None:
