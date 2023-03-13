@@ -1,5 +1,9 @@
 """Database - Read and write json files"""
 
+# Programmed by CoolCat467
+
+__title__ = "Generate Pages"
+__author__ = "CoolCat467"
 
 import json
 from os import makedirs, path
@@ -32,7 +36,7 @@ class Database(dict[str, Any]):
         if not path.exists(folder):
             makedirs(folder, exist_ok=True)
         with open(self.file, "w", encoding="utf-8") as file:
-            json.dump(self, file)
+            json.dump(self, file, separators=(",", ":"))
 
 
 class Table:

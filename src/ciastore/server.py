@@ -6,16 +6,18 @@
 
 
 __title__ = "Caught In the Act Server"
-__author__ = "CSHS Members"
+__author__ = "CoolCat467"
 __version__ = "0.0.0"
 
 
 import functools
 import json
+import math
 import secrets
 import socket
 import sys
 import time
+import uuid
 import warnings
 from os import getenv, makedirs, path
 from pathlib import Path
@@ -38,9 +40,6 @@ from werkzeug import Response as wkresp
 from werkzeug.exceptions import HTTPException
 
 from ciastore import database, elapsed, security
-
-# import uuid
-
 
 load_dotenv()
 DOMAIN: str | None = None
@@ -166,12 +165,20 @@ def login_require_only(
 
             if current_user.auth_id is None:
                 raise Unauthorized()
+
             users = database.load(app.root_path / "records" / "users.json")
+            username = get_login_from_cookie_data(current_user.auth_id)
 
-            if current_user.auth_id not in users:
-                return app.redirect("/logout")
+            if username is None or username not in users:
+                log(
+                    f"Invalid login UUID {current_user.auth_id} "
+                    "in authenticated user",
+                    2,
+                )
+                logout_user()
+                raise Unauthorized()
 
-            user = users[current_user.auth_id]
+            user = users[username]
             for raw_key, raw_value in attrs.items():
                 if isinstance(raw_value, str):
                     value = set((raw_value,))
@@ -235,13 +242,12 @@ async def stream_template(
                     continue
                 yield line
 
+    # TODO: Fix to actually stream
     return "".join([x async for x in generate()])
 
 
 async def get_exception_page(code: int, name: str, desc: str) -> Response:
     """Return Response for exception"""
-    #   body = htmlgen.wrap_tag("p", desc, block=False)
-    #   resp_body = template(f"{code} {name}", body)
     resp_body = await render_template(
         "exception_page.html.jinja",
         code=code,
@@ -268,6 +274,54 @@ def pretty_exception(function: Handler) -> Handler:
             )
 
     return cast(Handler, wrapper)
+
+
+def create_login_cookie_data(username: str) -> str:
+    """Generate UUID accociated with a specific user
+
+    Only one instance of an account should be able
+    to log in at any given time, subsequent will invalidate older
+    sessions. This will make remembering instances easier"""
+    # Get login database
+    logins = database.load(app.root_path / "records" / "login.json")
+
+    # Make new random code until it does not exist
+    while (code := str(uuid.uuid4())) in logins:
+        continue
+
+    # Make logins expire after a while
+    expires = int(time.time()) + 2628000  # Good for 1 month
+
+    # Write data back
+    logins[code] = {
+        "user": username,
+        "expires": expires,
+    }
+    logins.write_file()
+    return code
+
+
+def get_login_from_cookie_data(code: str) -> str | None:
+    """Get username from cookie data
+
+    If cookie data is invalid return None"""
+    # Get login database
+    logins = database.load(app.root_path / "records" / "login.json")
+
+    # Attempt to get entry for code. Using get instead of
+    # "in" search and then index means is faster
+    entry = logins.get(code, None)
+    # If not exists or malformed entry, is bad
+    if entry is None or not isinstance(entry, dict):
+        return None
+    # If expires not exist in entry or time expired, is bad and delete entry
+    if entry.get("expires", -math.inf) < int(time.time()):
+        log(f"Login UUID {code!r} expired")
+        del logins[code]
+        logins.write_file()
+        return None
+    # Otherwise attempt to return username field or is bad because malformed
+    return entry.get("user", None)
 
 
 def create_uninitialized_account(
@@ -355,7 +409,7 @@ async def convert_joining(code: str) -> bool:
 
     # If expired, erase and continue
     now = int(time.time())
-    expires = users[username].get("join_code_expires", now + 5)
+    expires = users[username].get("join_code_expires", math.inf)
 
     del users[username]["join_code"]
     del users[username]["join_code_expires"]
@@ -370,7 +424,7 @@ async def convert_joining(code: str) -> bool:
     users[username]["status"] = "created"
     users.write_file()
 
-    user = AuthUser(username)
+    user = AuthUser(create_login_cookie_data(username))
     login_user(user)
     log(f"User {username!r} logged in from join code")
 
@@ -516,7 +570,7 @@ async def login_post() -> wkresp:
         users[username]["status"] = "created"
         users.write_file()
 
-    user = AuthUser(username)
+    user = AuthUser(create_login_cookie_data(username))
     login_user(user)
     log(f"User {username!r} logged in")
 
@@ -527,7 +581,13 @@ async def login_post() -> wkresp:
 async def logout() -> wkresp:
     """Handle logout"""
     if await current_user.is_authenticated:
-        log(f"User {current_user.auth_id!r} logged out")
+        code = current_user.auth_id
+        assert code is not None
+        username = get_login_from_cookie_data(code)
+        if username is not None:
+            log(f"User {username!r} ({code}) logged out")
+        else:
+            log(f"Invalid UUID {code} logged out", 2)
     logout_user()
     return app.redirect("login")
 
@@ -539,11 +599,18 @@ async def user_data_route() -> wkresp | Response:
     """Dump user data"""
     assert current_user.auth_id is not None
     users = database.load(app.root_path / "records" / "users.json")
-    if current_user.auth_id not in users:
-        return app.redirect("/logout")
-    user = users[current_user.auth_id].copy()
-    user["username"] = current_user.auth_id
-    log(f"Record dump for {current_user.auth_id!r}", level=0)
+    username = get_login_from_cookie_data(current_user.auth_id)
+
+    if username is None or username not in users:
+        log(
+            f"Invalid login UUID {current_user.auth_id} "
+            "in authenticated user",
+            2,
+        )
+        logout_user()
+        return app.redirect("login")
+    user = users[username] | {"username": username}
+    log(f"Record dump for {username!r}", level=0)
     return Response(
         json.dumps(user, sort_keys=True),
         content_type="application/json",
@@ -666,6 +733,17 @@ async def settings_change_password_get() -> str:
 async def settings_password_post() -> wkresp | str:
     """Handle password change form"""
     assert current_user.auth_id is not None
+    users = database.load(app.root_path / "records" / "users.json")
+    username = get_login_from_cookie_data(current_user.auth_id)
+
+    if username is None or username not in users:
+        log(
+            f"Invalid login UUID {current_user.auth_id} "
+            "in authenticated user",
+            2,
+        )
+        logout_user()
+        return app.redirect("login")
 
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -673,8 +751,6 @@ async def settings_password_post() -> wkresp | str:
     # Validate response
     current_password = response.get("current_password", "")
     new_password = response.get("new_password", "")
-
-    username = current_user.auth_id
 
     if not current_password or not new_password:
         return app.redirect("/settings/change-password#bad")
@@ -719,6 +795,17 @@ async def invite_teacher_get() -> str:
 async def invite_teacher_post() -> str | wkresp:
     """Invite teacher form post handling"""
     assert current_user.auth_id is not None
+    users = database.load(app.root_path / "records" / "users.json")
+    creator_username = get_login_from_cookie_data(current_user.auth_id)
+
+    if creator_username is None or creator_username not in users:
+        log(
+            f"Invalid login UUID {current_user.auth_id} "
+            "in authenticated user",
+            2,
+        )
+        logout_user()
+        return app.redirect("login")
 
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -748,7 +835,6 @@ async def invite_teacher_post() -> str | wkresp:
 
     users.write_file()
 
-    creator_username = current_user.auth_id
     log(f"{creator_username!r} invited {new_account_username!r} as teacher")
 
     return await stream_template(
@@ -774,6 +860,17 @@ async def invite_manager_get() -> str:
 async def invite_manager_post() -> wkresp | str:
     """Invite manager form post handling"""
     assert current_user.auth_id is not None
+    users = database.load(app.root_path / "records" / "users.json")
+    creator_username = get_login_from_cookie_data(current_user.auth_id)
+
+    if creator_username is None or creator_username not in users:
+        log(
+            f"Invalid login UUID {current_user.auth_id} "
+            "in authenticated user",
+            2,
+        )
+        logout_user()
+        return app.redirect("login")
 
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -803,7 +900,6 @@ async def invite_manager_post() -> wkresp | str:
 
     users.write_file()
 
-    creator_username = current_user.auth_id
     log(f"{creator_username!r} invited {new_account_username!r} as manager")
 
     return await stream_template(
@@ -874,17 +970,26 @@ async def tickets_post() -> str | wkresp:
 
 
 @app.get("/")
-async def root_get() -> str:
+async def root_get() -> str | wkresp:
     """Main page GET request"""
 
     user_name = ""
     user_type = ""
     if await current_user.is_authenticated:
-        assert current_user.auth_id is not None
-        user_name = current_user.auth_id
-
         users = database.load(app.root_path / "records" / "users.json")
-        assert user_name in users
+        assert current_user.auth_id is not None
+        loaded_user = get_login_from_cookie_data(current_user.auth_id)
+
+        if loaded_user is None or loaded_user not in users:
+            log(
+                f"Invalid login UUID {current_user.auth_id} "
+                "in authenticated user",
+                2,
+            )
+            logout_user()
+            return app.redirect("login")
+        user_name = loaded_user
+
         user = users[user_name]
 
         user_type = user["type"]

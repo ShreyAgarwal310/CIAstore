@@ -1,5 +1,9 @@
 """Get elapsed time"""
 
+# Programmed by CoolCat467
+
+__title__ = "Elapsed"
+__author__ = "CoolCat467"
 
 from typing import Iterable
 

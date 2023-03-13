@@ -1,7 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# Generate Pages - Generate pages for the caught in the act store
-
 "Generate pages for the caught in the act store"
 
 # Programmed by CoolCat467

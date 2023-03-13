@@ -1,5 +1,10 @@
 """Security functions like hashing passwords"""
 
+# Programmed by CoolCat467
+
+__title__ = "Security"
+__author__ = "CoolCat467"
+
 import base64
 import hmac
 import secrets
