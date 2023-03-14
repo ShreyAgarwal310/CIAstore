@@ -337,3 +337,23 @@ hallos user
 yay newfrien
 {% endif %}"""
     )
+
+
+def test_jinja_if_block_after_else_exception() -> None:
+    with pytest.raises(ValueError):
+        htmlgen.jinja_if_block(
+            {
+                'name == "cat"': "Hallos cat",
+                "": "yay newfrien",
+                'name == "fish"': "hallos fish",
+            }
+        )
+
+
+def test_jinja_if_block_no_if_for_else_exception() -> None:
+    with pytest.raises(ValueError):
+        htmlgen.jinja_if_block(
+            {
+                "": "yay newfrien",
+            }
+        )

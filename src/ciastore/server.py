@@ -146,7 +146,10 @@ def get_user_by(**kwargs: str) -> set[str]:
 
 
 Handler = TypeVar(
-    "Handler", bound=Callable[..., Awaitable[str | wkresp | Response]]
+    "Handler",
+    bound=Callable[
+        ..., Awaitable[str | AsyncIterator[str] | wkresp | Response]
+    ],
 )
 
 
@@ -219,7 +222,7 @@ async def render_template(
 async def stream_template(
     template_name_or_list: str | Template | list[str | Template],
     **context: Any,
-) -> str:
+) -> AsyncIterator[str]:
     """Render a template by name with the given context as a stream.
 
     This returns an iterator of strings, which can be used as a
@@ -231,19 +234,18 @@ async def stream_template(
         context: The variables to make available in the template.
 
     Patched to remove blank lines left by jinja statements"""
+    # Generate stream in this async context block before context is lost
+    stream = await quart_stream_template(template_name_or_list, **context)
 
+    # Create async generator filter
     async def generate() -> AsyncIterator[str]:
-        generator = await quart_stream_template(
-            template_name_or_list, **context
-        )
-        async for chunk in generator:
+        async for chunk in stream:
             for line in chunk.splitlines(True):
                 if not line.rstrip():
                     continue
                 yield line
 
-    # TODO: Fix to actually stream
-    return "".join([x async for x in generate()])
+    return generate()
 
 
 async def get_exception_page(code: int, name: str, desc: str) -> Response:
@@ -529,7 +531,7 @@ async def convert_joining(code: str) -> bool:
 
 
 @app.get("/login")
-async def login_get() -> str:
+async def login_get() -> AsyncIterator[str]:
     """Get login page"""
     return await stream_template(
         "login_get.html.jinja",
@@ -620,7 +622,7 @@ async def user_data_route() -> wkresp | Response:
 @app.get("/add-tickets")
 @pretty_exception
 @login_require_only(type_={"teacher", "manager"})
-async def add_tickets_get() -> str:
+async def add_tickets_get() -> AsyncIterator[str]:
     """Add tickets page for teachers"""
     return await stream_template(
         "add_tickets_get.html.jinja",
@@ -630,7 +632,7 @@ async def add_tickets_get() -> str:
 @app.post("/add-tickets")
 @pretty_exception
 @login_require_only(type_={"teacher", "manager"})
-async def add_tickets_post() -> str | wkresp:
+async def add_tickets_post() -> AsyncIterator[str] | wkresp:
     """Handle post for add tickets form"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -661,7 +663,7 @@ async def add_tickets_post() -> str | wkresp:
 @app.get("/subtract-tickets")
 @pretty_exception
 @login_require_only(type_="manager")
-async def subtract_tickets_get() -> str:
+async def subtract_tickets_get() -> AsyncIterator[str]:
     """Subtract tickets page for managers"""
     return await stream_template(
         "subtract_tickets_get.html.jinja",
@@ -671,7 +673,7 @@ async def subtract_tickets_get() -> str:
 @app.post("/subtract-tickets")
 @pretty_exception
 @login_require_only(type_="manager")
-async def subtract_tickets_post() -> wkresp | str:
+async def subtract_tickets_post() -> AsyncIterator[str] | wkresp:
     """Handle post for subtract tickets form"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -710,7 +712,7 @@ async def subtract_tickets_post() -> wkresp | str:
 @app.get("/settings")
 @pretty_exception
 @login_required
-async def settings_get() -> str:
+async def settings_get() -> AsyncIterator[str]:
     """Settings page get request"""
     return await stream_template(
         "settings_get.html.jinja",
@@ -720,7 +722,7 @@ async def settings_get() -> str:
 @app.get("/settings/change-password")
 @pretty_exception
 @login_required
-async def settings_change_password_get() -> str:
+async def settings_change_password_get() -> AsyncIterator[str]:
     """Setting page for password change get"""
     return await stream_template(
         "settings_change_password_get.html.jinja",
@@ -730,7 +732,7 @@ async def settings_change_password_get() -> str:
 @app.post("/settings/change-password")
 @pretty_exception
 @login_required
-async def settings_password_post() -> wkresp | str:
+async def settings_password_post() -> AsyncIterator[str] | wkresp:
     """Handle password change form"""
     assert current_user.auth_id is not None
     users = database.load(app.root_path / "records" / "users.json")
@@ -782,7 +784,7 @@ async def settings_password_post() -> wkresp | str:
 @app.get("/invite-teacher")
 @pretty_exception
 @login_require_only(type_={"teacher", "manager"})
-async def invite_teacher_get() -> str:
+async def invite_teacher_get() -> AsyncIterator[str]:
     """Create new teacher account"""
     return await stream_template(
         "invite_teacher_get.html.jinja",
@@ -792,7 +794,7 @@ async def invite_teacher_get() -> str:
 @app.post("/invite-teacher")
 @pretty_exception
 @login_require_only(type_={"teacher", "manager"})
-async def invite_teacher_post() -> str | wkresp:
+async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
     """Invite teacher form post handling"""
     assert current_user.auth_id is not None
     users = database.load(app.root_path / "records" / "users.json")
@@ -814,6 +816,9 @@ async def invite_teacher_post() -> str | wkresp:
 
     if not new_account_username:
         return app.redirect("/invite-teacher#badusername")
+    length = len(new_account_username)
+    if length < 3 or length > 16:
+        return app.redirect("/invite-manager#badusername")
 
     possible_name = set("abcdefghijklmnopqrstuvwxyz0123456789")
     if bool(set(new_account_username) - possible_name):
@@ -847,7 +852,7 @@ async def invite_teacher_post() -> str | wkresp:
 @app.get("/invite-manager")
 @pretty_exception
 @login_require_only(type_="manager")
-async def invite_manager_get() -> str:
+async def invite_manager_get() -> AsyncIterator[str]:
     """Create a new manager account"""
     return await stream_template(
         "invite_manager_get.html.jinja",
@@ -857,7 +862,7 @@ async def invite_manager_get() -> str:
 @app.post("/invite-manager")
 @pretty_exception
 @login_require_only(type_="manager")
-async def invite_manager_post() -> wkresp | str:
+async def invite_manager_post() -> AsyncIterator[str] | wkresp:
     """Invite manager form post handling"""
     assert current_user.auth_id is not None
     users = database.load(app.root_path / "records" / "users.json")
@@ -878,6 +883,9 @@ async def invite_manager_post() -> wkresp | str:
     new_account_username = response.get("new_account_username", "")
 
     if not new_account_username:
+        return app.redirect("/invite-manager#badusername")
+    length = len(new_account_username)
+    if length < 3 or length > 16:
         return app.redirect("/invite-manager#badusername")
 
     possible_name = set("abcdefghijklmnopqrstuvwxyz0123456789")
@@ -909,14 +917,14 @@ async def invite_manager_post() -> wkresp | str:
     )
 
 
-async def ticket_get_form() -> str:
+async def ticket_get_form() -> AsyncIterator[str]:
     """Generate form for ticket GET when no ID given"""
     return await stream_template(
         "ticket_get_form.html.jinja",
     )
 
 
-async def ticket_count_page(username: str) -> str:
+async def ticket_count_page(username: str) -> AsyncIterator[str]:
     """Ticket count page for given username"""
     try:
         count = get_user_ticket_count(username)
@@ -935,7 +943,7 @@ async def ticket_count_page(username: str) -> str:
 
 @app.get("/tickets")
 @pretty_exception
-async def tickets_get() -> str | wkresp:
+async def tickets_get() -> AsyncIterator[str] | wkresp:
     """Tickets view page"""
     # Get username from request arguments if it exists
     username = request.args.get("id", None)
@@ -952,7 +960,7 @@ async def tickets_get() -> str | wkresp:
 
 @app.post("/tickets")
 @pretty_exception
-async def tickets_post() -> str | wkresp:
+async def tickets_post() -> AsyncIterator[str] | wkresp:
     """Invite teacher form post handling"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -970,7 +978,7 @@ async def tickets_post() -> str | wkresp:
 
 
 @app.get("/")
-async def root_get() -> str | wkresp:
+async def root_get() -> AsyncIterator[str] | wkresp:
     """Main page GET request"""
 
     user_name = ""
