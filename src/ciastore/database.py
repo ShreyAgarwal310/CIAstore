@@ -2,13 +2,14 @@
 
 # Programmed by CoolCat467
 
-__title__ = "Generate Pages"
+__title__ = "Database"
 __author__ = "CoolCat467"
 
 import json
+from collections.abc import Generator, Iterable, Iterator
 from os import makedirs, path
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any
 
 _LOADED: dict[str, "Records"] = {}
 
@@ -27,7 +28,7 @@ class Database(dict[str, Any]):
 
     def reload_file(self) -> None:
         """Reload database file"""
-        with open(self.file, "r", encoding="utf-8") as file:
+        with open(self.file, "rb") as file:
             self.update(json.load(file))
 
     def write_file(self) -> None:
@@ -112,6 +113,12 @@ class Table:
         for key in self.keys():
             items.append((key, self[key]))
         return tuple(items)
+
+    def rows(self) -> Generator[tuple[Any, ...], None, None]:
+        """Return generator of each row"""
+        columns = self.keys() - {self._key_name}
+        for key, value in self._records.items():
+            yield (key,) + tuple(value.get(col) for col in columns)
 
     def __len__(self) -> int:
         return len(self._records)

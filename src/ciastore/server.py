@@ -1059,7 +1059,7 @@ async def run_async(
 
         await serve(app, config_obj)
     except socket.error:
-        log(f"Cannot bind to IP address '{ip_addr}' port {port}", 1)
+        log(f"Cannot bind to IP address '{ip_addr}' port {port}", 2)
         sys.exit(1)
     except KeyboardInterrupt:
         log("Shutting down from keyboard interrupt")
