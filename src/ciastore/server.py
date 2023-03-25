@@ -6,7 +6,7 @@
 
 
 __title__ = "Caught In the Act Server"
-__author__ = "CoolCat467"
+__author__ = "CSHS Members"
 __version__ = "0.0.0"
 
 
