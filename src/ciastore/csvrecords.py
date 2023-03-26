@@ -22,14 +22,18 @@ _LOADED: dict[str, "CSVRecords"] = {}
 class CSVRecords(dict[str, Any]):
     """Database dict with file read write functions"""
 
-    __slots__ = ("file", "key_name", "__weakref__")
+    __slots__ = ("file", "key_name", "__weakref__", "_lock")
 
     def __init__(
-        self, file_path: str | Path | trio.Path, key_name: str
+        self,
+        file_path: str | Path | trio.Path,
+        key_name: str,
+        lock: trio.StrictFIFOLock,
     ) -> None:
         super().__init__()
         self.file = file_path
         self.key_name = key_name
+        self._lock = lock
 
         if path.exists(self.file):
             self.reload_file()
@@ -54,20 +58,21 @@ class CSVRecords(dict[str, Any]):
         folder = trio.Path(path.dirname(self.file))
         if not await folder.exists():
             makedirs(folder, exist_ok=True)
-        table = Table(self, self.key_name)
-        async with await trio.open_file(
-            self.file, "w", encoding="utf-8"
-        ) as file:
-            keys = table.keys()
-            await file.write(",".join(keys))
-            await file.write("\n")
-            for entry_name, value in self.items():
-                await file.write(entry_name)
-                for key in keys:
-                    if key == self.key_name:
-                        continue
-                    await file.write(f",{value.get(key, '')}")
+        async with self._lock:
+            table = Table(self, self.key_name)
+            async with await trio.open_file(
+                self.file, "w", encoding="utf-8"
+            ) as file:
+                keys = table.keys()
+                await file.write(",".join(keys))
                 await file.write("\n")
+                for entry_name, value in self.items():
+                    await file.write(entry_name)
+                    for key in keys:
+                        if key == self.key_name:
+                            continue
+                        await file.write(f",{value.get(key, '')}")
+                    await file.write("\n")
 
 
 #    @staticmethod
@@ -99,7 +104,8 @@ def load(file_path: str | Path, key_name: str | None = None) -> CSVRecords:
     if file not in _LOADED:
         if key_name is None:
             raise ValueError("key_name must not be None when loading records")
-        _LOADED[file] = CSVRecords(file, key_name)
+        lock = trio.StrictFIFOLock()
+        _LOADED[file] = CSVRecords(file, key_name, lock)
     return _LOADED[file]
 
 

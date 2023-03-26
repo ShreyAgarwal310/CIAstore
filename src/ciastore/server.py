@@ -399,7 +399,7 @@ def subtract_user_tickets(username: str, count: int) -> int:
     return new
 
 
-async def convert_joining(code: str) -> bool:
+def convert_joining(code: str) -> bool:
     """Convert joining record to student record"""
     # Get usernames with matching join code and who are joining
     users = database.load(app.root_path / "records" / "users.json")
@@ -439,7 +439,7 @@ async def convert_joining(code: str) -> bool:
 #    # Get code from request arguments if it exists
 #    code = request.args.get("code", None)
 #    if code is not None:
-#        success = await convert_joining(code)
+#        success = convert_joining(code)
 #        if success:
 #            return app.redirect("/")
 #        return app.redirect("/signup#codeinvalid")
@@ -1083,7 +1083,8 @@ or set COOKIE_SECRET environment variable."""
     trio.run(
         functools.partial(
             run_async, root_dir, port, cookie_secret=cookie_secret
-        )
+        ),
+        restrict_keyboard_interrupt_to_checkpoints=True,
     )
 
 
