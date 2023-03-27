@@ -1009,6 +1009,57 @@ async def root_get() -> AsyncIterator[str] | wkresp:
     )
 
 
+async def backup() -> None:
+    """Backup all records"""
+    log("Preforming backup")
+    for database_name in database.get_loaded():
+        # Get folder and filename
+        folder = path.dirname(database_name)
+        orig_filename = path.basename(database_name)
+
+        # Attempt to get list of [{filename}, {file end}]
+        file_parts = orig_filename.rsplit(".", 1)
+        if len(file_parts) == 2:
+            # End exists
+            name, end = file_parts
+            # If is already a backup, do not backup the backup.
+            # If this happens that is bad.
+            if "bak" in end:
+                continue
+            end = f"{end}.bak"
+        else:
+            # If end not exist, just make it a backup file
+            name = file_parts[0]
+            end = "bak"
+
+        # We have now gotten name and end, add time stamp to name
+        name = time.strftime(f"{name}_(%Y_%m_%d)")
+        filename = f"{name}.{end}"
+
+        # Get full path of backup file
+        backup_name = path.join(folder, "backup", filename)
+
+        # Load up file to take backup of and new backup file
+        instance = database.load(database_name)
+        backup = database.load(backup_name)
+
+        # Add contents of original to backup
+        backup.update(instance)
+
+        # Unload backup file which triggers it to write,
+        # including creating folders if it has to
+        database.unload(backup_name)
+    log("Backup complete")
+
+
+async def periodic_backups() -> None:
+    """Trigger periodic backups"""
+    while True:
+        # Do backup every 6 hours
+        await trio.sleep(60 * 60 * 6)
+        await backup()
+
+
 async def run_async(
     root_dir: str,
     port: int,
@@ -1057,7 +1108,9 @@ async def run_async(
         proto = "http" if not DOMAIN else "https"
         print(f"Serving on {proto}://{location}\n(CTRL + C to quit)")
 
-        await serve(app, config_obj)
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(serve, app, config_obj)
+            nursery.start_soon(periodic_backups)
     except socket.error:
         log(f"Cannot bind to IP address '{ip_addr}' port {port}", 2)
         sys.exit(1)
