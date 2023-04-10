@@ -11,7 +11,6 @@ __version__ = "0.0.0"
 
 
 import functools
-import json
 import math
 import secrets
 import socket
@@ -19,7 +18,7 @@ import sys
 import time
 import uuid
 import warnings
-from os import getenv, makedirs, path
+from os import getenv, path
 from pathlib import Path
 from typing import (Any, AsyncIterator, Awaitable, Callable, Final, TypeVar,
                     cast)
@@ -39,37 +38,12 @@ from quart_trio import QuartTrio
 from werkzeug import Response as wkresp
 from werkzeug.exceptions import HTTPException
 
-from ciastore import database, elapsed, security
+from ciastore import backups, database, elapsed, security
+from ciastore.logger import log
 
 load_dotenv()
 DOMAIN: str | None = None
 PEPPER: Final = getenv("COOKIE_SECRET", "")
-
-
-def log(message: str, level: int = 1, log_dir: str | None = None) -> None:
-    "Log a message to console and log file."
-    levels = ["DEBUG", "INFO", "ERROR"]
-
-    if log_dir is None:
-        log_dir = path.join(path.dirname(__file__), "logs")
-    if not path.exists(log_dir):
-        makedirs(log_dir, exist_ok=True)
-    filename = time.strftime("log_%Y_%m_%d.log")
-    log_file = path.join(log_dir, filename)
-
-    log_level = levels[min(max(0, level), len(levels) - 1)]
-    log_time = time.asctime()
-    log_message_text = message.encode("unicode_escape").decode("utf-8")
-
-    log_msg = f"[{__title__}] [{log_time}] [{log_level}] {log_message_text}"
-
-    if not path.exists(log_file):
-        with open(log_file, mode="w", encoding="utf-8") as file:
-            file.close()
-    with open(log_file, mode="a", encoding="utf-8") as file:
-        file.write(f"{log_msg}\n")
-        file.close()
-    print(log_msg)
 
 
 # Stolen from WOOF (Web Offer One File), Copyright (C) 2004-2009 Simon Budig,
@@ -594,11 +568,12 @@ async def logout() -> wkresp:
     return app.redirect("login")
 
 
-## Remove this later, potential security vulnerability
 # @app.get("/user_data")
 # @login_required
 # async def user_data_route() -> wkresp | Response:
-#    """Dump user data"""
+#    """Dump user data
+#
+#    Warning, potential security issue, do not run in production"""
 #    assert current_user.auth_id is not None
 #    users = database.load(app.root_path / "records" / "users.json")
 #    username = get_login_from_cookie_data(current_user.auth_id)
@@ -1009,57 +984,6 @@ async def root_get() -> AsyncIterator[str] | wkresp:
     )
 
 
-async def backup() -> None:
-    """Backup all records"""
-    log("Preforming backup")
-    for database_name in database.get_loaded():
-        # Get folder and filename
-        folder = path.dirname(database_name)
-        orig_filename = path.basename(database_name)
-
-        # Attempt to get list of [{filename}, {file end}]
-        file_parts = orig_filename.rsplit(".", 1)
-        if len(file_parts) == 2:
-            # End exists
-            name, end = file_parts
-            # If is already a backup, do not backup the backup.
-            # If this happens that is bad.
-            if "bak" in end:
-                continue
-            end = f"{end}.bak"
-        else:
-            # If end not exist, just make it a backup file
-            name = file_parts[0]
-            end = "bak"
-
-        # We have now gotten name and end, add time stamp to name
-        name = time.strftime(f"{name}_(%Y_%m_%d)")
-        filename = f"{name}.{end}"
-
-        # Get full path of backup file
-        backup_name = path.join(folder, "backup", filename)
-
-        # Load up file to take backup of and new backup file
-        instance = database.load(database_name)
-        backup = database.load(backup_name)
-
-        # Add contents of original to backup
-        backup.update(instance)
-
-        # Unload backup file which triggers it to write,
-        # including creating folders if it has to
-        database.unload(backup_name)
-    log("Backup complete")
-
-
-async def periodic_backups() -> None:
-    """Trigger periodic backups"""
-    while True:
-        # Do backup every 6 hours
-        await trio.sleep(60 * 60 * 6)
-        await backup()
-
-
 async def run_async(
     root_dir: str,
     port: int,
@@ -1110,7 +1034,7 @@ async def run_async(
 
         async with trio.open_nursery() as nursery:
             nursery.start_soon(serve, app, config_obj)
-            nursery.start_soon(periodic_backups)
+            nursery.start_soon(backups.periodic_backups)
     except socket.error:
         log(f"Cannot bind to IP address '{ip_addr}' port {port}", 2)
         sys.exit(1)
@@ -1127,8 +1051,8 @@ def run() -> None:
 
     if cookie_secret is None:
         print(
-            """\nNo token set!
-Either add ".env" file in bots folder with COOKIE_SECRET=<token here> line,
+            """\nNo cookie secret set!
+Either add ".env" file in server folder with COOKIE_SECRET=<token here> line,
 or set COOKIE_SECRET environment variable."""
         )
         return
