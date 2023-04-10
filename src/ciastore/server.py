@@ -594,29 +594,29 @@ async def logout() -> wkresp:
     return app.redirect("login")
 
 
-# Remove this later, potential security vulnerability
-@app.get("/user_data")
-@login_required
-async def user_data_route() -> wkresp | Response:
-    """Dump user data"""
-    assert current_user.auth_id is not None
-    users = database.load(app.root_path / "records" / "users.json")
-    username = get_login_from_cookie_data(current_user.auth_id)
-
-    if username is None or username not in users:
-        log(
-            f"Invalid login UUID {current_user.auth_id} "
-            "in authenticated user",
-            2,
-        )
-        logout_user()
-        return app.redirect("login")
-    user = users[username] | {"username": username}
-    log(f"Record dump for {username!r}", level=0)
-    return Response(
-        json.dumps(user, sort_keys=True),
-        content_type="application/json",
-    )
+## Remove this later, potential security vulnerability
+# @app.get("/user_data")
+# @login_required
+# async def user_data_route() -> wkresp | Response:
+#    """Dump user data"""
+#    assert current_user.auth_id is not None
+#    users = database.load(app.root_path / "records" / "users.json")
+#    username = get_login_from_cookie_data(current_user.auth_id)
+#
+#    if username is None or username not in users:
+#        log(
+#            f"Invalid login UUID {current_user.auth_id} "
+#            "in authenticated user",
+#            2,
+#        )
+#        logout_user()
+#        return app.redirect("login")
+#    user = users[username] | {"username": username}
+#    log(f"Record dump for {username!r}", level=0)
+#    return Response(
+#        json.dumps(user, sort_keys=True),
+#        content_type="application/json",
+#    )
 
 
 @app.get("/add-tickets")

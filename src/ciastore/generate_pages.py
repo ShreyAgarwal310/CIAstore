@@ -873,7 +873,7 @@ def generate_root_get() -> str:
                         (
                             htmlgen.link_list(
                                 {
-                                    "/user_data": "[DEBUG] View user data",
+                                    # "/user_data": "[DEBUG] View user data",
                                     "/logout": "Log Out",
                                     "/settings": "Account Settings",
                                     "/tickets": "View ticket count",
