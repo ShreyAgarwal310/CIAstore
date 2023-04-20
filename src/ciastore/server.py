@@ -1136,6 +1136,8 @@ or set COOKIE_SECRET environment variable."""
     if hostname != "None":
         ip_address = hostname
 
+    local = "--local" in sys.argv[1:]
+
     trio.run(
         functools.partial(
             run_async,
@@ -1143,6 +1145,7 @@ or set COOKIE_SECRET environment variable."""
             port,
             cookie_secret=cookie_secret,
             ip_addr=ip_address,
+            localhost=local,
         ),
         restrict_keyboard_interrupt_to_checkpoints=True,
     )
