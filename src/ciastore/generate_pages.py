@@ -228,6 +228,7 @@ def template(
                 "footer",
                 "\n".join(
                     (
+                        # Maybe remove in the future, but kind of funny
                         htmlgen.wrap_tag(
                             "i",
                             "If you're reading this, the web server "
@@ -247,6 +248,37 @@ def template(
 
     return htmlgen.template(
         title, body_data, head=head_data, body_tag=body_tag, lang=lang
+    )
+
+
+@save_template_as("error_page")
+def generate_error_page() -> str:
+    """Generate error response page"""
+    error_text = htmlgen.wrap_tag("p", htmlgen.jinja_expression("error_body"))
+    content = "\n".join(
+        (
+            error_text,
+            htmlgen.tag("br"),
+            htmlgen.jinja_if_block(
+                {
+                    "return_link": "\n".join(
+                        (
+                            htmlgen.create_link(
+                                htmlgen.jinja_expression("return_link"),
+                                "Return to previous page",
+                            ),
+                            htmlgen.tag("br"),
+                        )
+                    )
+                }
+            ),
+            htmlgen.create_link("/", "Return to main page"),
+        )
+    )
+    body = htmlgen.contain_in_box(content)
+    return template(
+        htmlgen.jinja_expression("page_title"),
+        body,
     )
 
 
@@ -329,11 +361,9 @@ def generate_login_get() -> str:
     body = "<br>\n".join(
         (
             htmlgen.contain_in_box(form),
-            htmlgen.link_list(
-                {
-                    "/signup": "Don't have an account?",
-                    # "/forgot": "Forgot password?",
-                }
+            htmlgen.wrap_tag(
+                "i",
+                "Ask a staff member if you need to create an account",
             ),
         )
     )

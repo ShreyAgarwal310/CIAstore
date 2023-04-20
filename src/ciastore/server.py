@@ -28,10 +28,8 @@ import trio
 from dotenv import load_dotenv
 from hypercorn.config import Config
 from hypercorn.trio import serve
-from jinja2 import Template
 from quart import Response, request
-from quart.templating import render_template as quart_render_template
-from quart.templating import stream_template as quart_stream_template
+from quart.templating import render_template, stream_template
 from quart_auth import (AuthManager, AuthUser, Unauthorized, current_user,
                         login_required, login_user, logout_user)
 from quart_trio import QuartTrio
@@ -172,56 +170,6 @@ def login_require_only(
     return get_wrapper
 
 
-async def render_template(
-    template_name_or_list: str | list[str], **context: Any
-) -> str:
-    """Render the template with the context given.
-
-    Arguments:
-        template_name_or_list: Template name to render of a list of
-            possible template names.
-        context: The variables to pass to the template.
-
-    Patched to remove blank lines left by jinja statements"""
-    content = await quart_render_template(template_name_or_list, **context)
-    new_content = []
-    for line in content.splitlines():
-        new_line = line.rstrip()
-        if not new_line:
-            continue
-        new_content.append(new_line)
-    return "\n".join(new_content)
-
-
-async def stream_template(
-    template_name_or_list: str | Template | list[str | Template],
-    **context: Any,
-) -> AsyncIterator[str]:
-    """Render a template by name with the given context as a stream.
-
-    This returns an iterator of strings, which can be used as a
-    streaming response from a view.
-
-    Arguments:
-        template_name_or_list: The name of the template to render. If a
-            list is given, the first name to exist will be rendered.
-        context: The variables to make available in the template.
-
-    Patched to remove blank lines left by jinja statements"""
-    # Generate stream in this async context block before context is lost
-    stream = await quart_stream_template(template_name_or_list, **context)
-
-    # Create async generator filter
-    async def generate() -> AsyncIterator[str]:
-        async for chunk in stream:
-            for line in chunk.splitlines(True):
-                if not line.rstrip():
-                    continue
-                yield line
-
-    return generate()
-
-
 async def get_exception_page(code: int, name: str, desc: str) -> Response:
     """Return Response for exception"""
     resp_body = await render_template(
@@ -307,7 +255,7 @@ def create_uninitialized_account(
     users = database.load(app.root_path / "records" / "users.json")
     if username in users:
         error = f"Attempted to create new account for {username} which exists"
-        warnings.warn(error)
+        warnings.warn(error, stacklevel=2)
         log(error, 2)
         return
     users[username] = {
@@ -407,6 +355,20 @@ def convert_joining(code: str) -> bool:
     return True
 
 
+async def send_error(
+    page_title: str,
+    error_body: str,
+    return_link: str | None = None,
+) -> AsyncIterator[str]:
+    """Stream error page"""
+    return await stream_template(
+        "error_page.html.jinja",
+        page_title=page_title,
+        error_body=error_body,
+        return_link=return_link,
+    )
+
+
 # @app.get("/signup")
 # async def signup_get() -> str | wkresp:
 #    """Handle sign up get including code register"""
@@ -416,7 +378,11 @@ def convert_joining(code: str) -> bool:
 #        success = convert_joining(code)
 #        if success:
 #            return app.redirect("/")
-#        return app.redirect("/signup#codeinvalid")
+#        return await send_error(
+#            "Signup Code Error",
+#            "Signup code is invalid. It may have expired.",
+#            request.url
+#        )
 #    return await stream_template(
 #        "signup_get.html.jinja",
 #    )
@@ -433,9 +399,19 @@ def convert_joining(code: str) -> bool:
 #    password = response.get("password", "")
 #
 #    if bool(set(username) - set("0123456789")) or len(username) != 6:
-#        return app.redirect("/signup#badusername")
+#        return await send_error(
+#            "Signup Error",
+#            "Student usernames can only be numbers and must be exactly 6 "+
+#            "digits long.",
+#            request.url
+#        )
 #    if len(set(password)) < 7:
-#        return app.redirect("/signup#badpassword")
+#        return await send_error(
+#            "Signup Error",
+#            "Password must have at least seven different characters "+
+#            "for security reasons. Please use a more secure password.",
+#            request.url
+#        )
 #
 #    users = database.load(app.root_path / "records" / "users.json")
 #
@@ -444,7 +420,11 @@ def convert_joining(code: str) -> bool:
 #    if username in users:
 #        status = users[username].get("status", "not_created")
 #        if status == "created":
-#            return app.redirect("/signup#userexists")
+#            return await send_error(
+#                "Signup Error",
+#                "A user with the requested username already exists",
+#                request.url
+#            )
 #        if status == "joining":
 #            now = int(time.time())
 #            if users[username].get("join_code_expires", now + 5) < now:
@@ -513,7 +493,7 @@ async def login_get() -> AsyncIterator[str]:
 
 
 @app.post("/login")
-async def login_post() -> wkresp:
+async def login_post() -> AsyncIterator[str] | wkresp:
     """Handle login form"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -523,23 +503,37 @@ async def login_post() -> wkresp:
     password = response.get("password", "")
 
     if not username or not password:
-        return app.redirect("/login#bad")
+        return await send_error(
+            "Login Error", "Username or password field not found", request.url
+        )
 
     # Check Credentials here, e.g. username & password.
     users = database.load(app.root_path / "records" / "users.json")
 
     if username not in users:
-        return app.redirect("/login#bad")
+        return await send_error(
+            "Login Error", "Username or password is invalid.", request.url
+        )
 
     if users[username].get("type", "student") == "student":
-        return app.redirect("/login#no-student-login")
+        return await send_error(
+            "Login Error",
+            "Students are not allowed to log in at this time.",
+            request.url,
+        )
 
     database_value = users[username].get("password", None)
     if database_value is None:
-        return app.redirect("/login#bad")
+        return await send_error(
+            "Login Error",
+            "User data is missing password field (Please report to CSHS).",
+            request.url,
+        )
     if not await security.compare_hash(password, database_value, PEPPER):
         # Bad password
-        return app.redirect("/login#badpass")
+        return await send_error(
+            "Login Error", "Username or password is invalid.", request.url
+        )
 
     # Make sure to change status of auto password accounts
     if users[username].get("status") == "created_auto_password":
@@ -607,7 +601,7 @@ async def add_tickets_get() -> AsyncIterator[str]:
 @app.post("/add-tickets")
 @pretty_exception
 @login_require_only(type_={"teacher", "manager"})
-async def add_tickets_post() -> AsyncIterator[str] | wkresp:
+async def add_tickets_post() -> AsyncIterator[str]:
     """Handle post for add tickets form"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -622,7 +616,9 @@ async def add_tickets_post() -> AsyncIterator[str] | wkresp:
         if ticket_count < 1 or ticket_count > 10:
             raise ValueError
     except ValueError:
-        return app.redirect("/add-tickets#badcount")
+        return await send_error(
+            "Ticket Count Error", "Ticket count is not in range.", request.url
+        )
 
     add_tickets_to_user(student_id, ticket_count)
 
@@ -648,7 +644,7 @@ async def subtract_tickets_get() -> AsyncIterator[str]:
 @app.post("/subtract-tickets")
 @pretty_exception
 @login_require_only(type_="manager")
-async def subtract_tickets_post() -> AsyncIterator[str] | wkresp:
+async def subtract_tickets_post() -> AsyncIterator[str]:
     """Handle post for subtract tickets form"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -663,16 +659,27 @@ async def subtract_tickets_post() -> AsyncIterator[str] | wkresp:
         if ticket_count < 1 or ticket_count > 100:
             raise ValueError
     except ValueError:
-        return app.redirect("/subtract-tickets#badcount")
+        return await send_error(
+            "Ticket Count Error", "Ticket count is not in range.", request.url
+        )
 
     try:
         tickets_left = subtract_user_tickets(student_id, ticket_count)
     except LookupError:
         # Username not exist
-        return app.redirect("/subtract-tickets#student-not-found")
+        return await send_error(
+            "Not Enough Tickets Error",
+            "Requested student has zero tickets.",
+            request.url,
+        )
     except ValueError:
         # Count > number of tickets in account
-        return app.redirect("/subtract-tickets#not-enough-tickets")
+        return await send_error(
+            "Not Enough Tickets Error",
+            "Student does not have enough tickets for the requested "
+            + "transaction",
+            request.url,
+        )
 
     plural = "" if ticket_count < 2 else "s"
     return await stream_template(
@@ -730,20 +737,29 @@ async def settings_password_post() -> AsyncIterator[str] | wkresp:
     new_password = response.get("new_password", "")
 
     if not current_password or not new_password:
-        return app.redirect("/settings/change-password#bad")
+        return await send_error(
+            "Request Error",
+            "Current password or new password field not found.",
+            request.url,
+        )
 
     # Check Credentials here, e.g. username & password.
     users = database.load(app.root_path / "records" / "users.json")
 
     if username not in users:
-        return app.redirect("/logout")
+        logout_user()
+        return app.redirect("login")
 
     if not await security.compare_hash(
         current_password, users[username]["password"], PEPPER
     ):
         # Bad password
         log(f"{username!r} did not enter own password in change password")
-        return app.redirect("/settings/change-password#current_not_match")
+        return await send_error(
+            "Password Does Not Match Error",
+            "Entered password does not match current password.",
+            request.url,
+        )
 
     users[username]["password"] = security.create_new_login_credentials(
         new_password, PEPPER
@@ -790,20 +806,39 @@ async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
     new_account_username = response.get("new_account_username", "")
 
     if not new_account_username:
-        return app.redirect("/invite-teacher#badusername")
+        return await send_error(
+            "Invite User Error",
+            "New account username must be between 3 and 16 characters long "
+            + "and cannot contain special characters",
+            request.url,
+        )
     length = len(new_account_username)
     if length < 3 or length > 16:
-        return app.redirect("/invite-manager#badusername")
+        return await send_error(
+            "Invite User Error",
+            "New account username must be between 3 and 16 characters long "
+            + "and cannot contain special characters",
+            request.url,
+        )
 
     possible_name = set("abcdefghijklmnopqrstuvwxyz0123456789")
     if bool(set(new_account_username) - possible_name):
-        return app.redirect("/invite-teacher#badusername")
+        return await send_error(
+            "Invite User Error",
+            "New account username must be between 3 and 16 characters long "
+            + "and cannot contain special characters",
+            request.url,
+        )
 
     users = database.load(app.root_path / "records" / "users.json")
 
     if new_account_username in users:
         if users[new_account_username]["status"] != "created_auto_password":
-            return app.redirect("/invite-teacher#userexists")
+            return await send_error(
+                "Invite User Error",
+                "An account with the requested username already exists",
+                request.url,
+            )
 
     password = secrets.token_urlsafe(16)
 
@@ -858,20 +893,39 @@ async def invite_manager_post() -> AsyncIterator[str] | wkresp:
     new_account_username = response.get("new_account_username", "")
 
     if not new_account_username:
-        return app.redirect("/invite-manager#badusername")
+        return await send_error(
+            "Invite User Error",
+            "New account username must be between 3 and 16 characters long "
+            + "and cannot contain special characters",
+            request.url,
+        )
     length = len(new_account_username)
     if length < 3 or length > 16:
-        return app.redirect("/invite-manager#badusername")
+        return await send_error(
+            "Invite User Error",
+            "New account username must be between 3 and 16 characters long "
+            + "and cannot contain special characters",
+            request.url,
+        )
 
     possible_name = set("abcdefghijklmnopqrstuvwxyz0123456789")
     if bool(set(new_account_username) - possible_name):
-        return app.redirect("/invite-manager#badusername")
+        return await send_error(
+            "Invite User Error",
+            "New account username must be between 3 and 16 characters long "
+            + "and cannot contain special characters",
+            request.url,
+        )
 
     users = database.load(app.root_path / "records" / "users.json")
 
     if new_account_username in users:
         if users[new_account_username]["status"] != "created_auto_password":
-            return app.redirect("/invite-manager#userexists")
+            return await send_error(
+                "Invite User Error",
+                "An account with the requested username already exists",
+                request.url,
+            )
 
     password = secrets.token_urlsafe(16)
 
@@ -918,7 +972,7 @@ async def ticket_count_page(username: str) -> AsyncIterator[str]:
 
 @app.get("/tickets")
 @pretty_exception
-async def tickets_get() -> AsyncIterator[str] | wkresp:
+async def tickets_get() -> AsyncIterator[str]:
     """Tickets view page"""
     # Get username from request arguments if it exists
     username = request.args.get("id", None)
@@ -935,7 +989,7 @@ async def tickets_get() -> AsyncIterator[str] | wkresp:
 
 @app.post("/tickets")
 @pretty_exception
-async def tickets_post() -> AsyncIterator[str] | wkresp:
+async def tickets_post() -> AsyncIterator[str]:
     """Invite teacher form post handling"""
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -984,6 +1038,12 @@ async def root_get() -> AsyncIterator[str] | wkresp:
     )
 
 
+@app.before_serving
+async def startup() -> None:
+    """Schedule backups"""
+    app.add_background_task(backups.periodic_backups)
+
+
 async def run_async(
     root_dir: str,
     port: int,
@@ -1016,6 +1076,11 @@ async def run_async(
         app.config["QUART_AUTH_COOKIE_SAMESITE"] = "Strict"
         app.config["SERVER_NAME"] = location
 
+        app.jinja_options = {
+            "trim_blocks": True,
+            "lstrip_blocks": True,
+        }
+
         app.static_folder = Path(root_dir, "static")
 
         app.add_url_rule(
@@ -1032,9 +1097,7 @@ async def run_async(
         proto = "http" if not DOMAIN else "https"
         print(f"Serving on {proto}://{location}\n(CTRL + C to quit)")
 
-        async with trio.open_nursery() as nursery:
-            nursery.start_soon(serve, app, config_obj)
-            nursery.start_soon(backups.periodic_backups)
+        await serve(app, config_obj)
     except socket.error:
         log(f"Cannot bind to IP address '{ip_addr}' port {port}", 2)
         sys.exit(1)
