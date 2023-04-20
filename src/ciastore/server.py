@@ -946,13 +946,15 @@ async def invite_manager_post() -> AsyncIterator[str] | wkresp:
     )
 
 
+@pretty_exception
 async def ticket_get_form() -> AsyncIterator[str]:
     """Generate form for ticket GET when no ID given"""
     return await stream_template(
-        "ticket_get_form.html.jinja",
+        "ticket_form.html.jinja",
     )
 
 
+@pretty_exception
 async def ticket_count_page(username: str) -> AsyncIterator[str]:
     """Ticket count page for given username"""
     try:
@@ -963,7 +965,7 @@ async def ticket_count_page(username: str) -> AsyncIterator[str]:
     user_link = app.url_for("tickets_get") + "?" + urlencode({"id": username})
 
     return await stream_template(
-        "ticket_count.html.jinja",
+        "ticket_count_page.html.jinja",
         username=repr(username),
         count=repr(count),
         user_link=user_link,
@@ -980,9 +982,13 @@ async def tickets_get() -> AsyncIterator[str]:
     if not username:
         return await ticket_get_form()
 
-    if bool(set(username) - set("0123456789")):
+    if bool(set(username) - set("0123456789")) or len(username) != 6:
         # If username has any character except 0-9, bad
-        return await ticket_get_form()
+        return await send_error(
+            "User Error",
+            "Username is invalid.",
+            request.url,
+        )
 
     return await ticket_count_page(username)
 
@@ -996,11 +1002,12 @@ async def tickets_post() -> AsyncIterator[str]:
 
     username = response.get("student_id", None)
 
-    if username:
+    if not username:
         return await ticket_get_form()
 
     if bool(set(username) - set("0123456789")):
         # If username has any character except 0-9, bad
+        print(f"{username!r} bad")
         return await ticket_get_form()
 
     return await ticket_count_page(username)
@@ -1050,10 +1057,13 @@ async def run_async(
     *,
     ip_addr: str | None = None,
     cookie_secret: str | None = None,
+    localhost: bool = False,
 ) -> None:
     """Asynchronous Entry Point"""
     if ip_addr is None:
-        ip_addr = find_ip()
+        ip_addr = "0.0.0.0"
+        if not localhost:
+            ip_addr = find_ip()
 
     try:
         # Add more information about the address
@@ -1120,9 +1130,19 @@ or set COOKIE_SECRET environment variable."""
         )
         return
 
+    hostname: Final = getenv("hostname", "None")
+
+    ip_address = None
+    if hostname != "None":
+        ip_address = hostname
+
     trio.run(
         functools.partial(
-            run_async, root_dir, port, cookie_secret=cookie_secret
+            run_async,
+            root_dir,
+            port,
+            cookie_secret=cookie_secret,
+            ip_addr=ip_address,
         ),
         restrict_keyboard_interrupt_to_checkpoints=True,
     )
