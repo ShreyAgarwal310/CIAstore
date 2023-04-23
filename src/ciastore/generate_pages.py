@@ -475,7 +475,7 @@ def generate_subtract_tickets_post() -> str:
                     "p",
                     "Subtracted {{ ticket_count }} ticket{{ plural }} "
                     "from {{ student_id }}. They now have {{ tickets_left }} "
-                    "tickets",
+                    "ticket{{ plural }}.",
                     block=False,
                 )
             ),
@@ -690,9 +690,7 @@ def generate_invite_teacher_post() -> str:
 @save_template_as("invite_manager_get")
 def generate_invite_manager_get() -> str:
     """Generate /invite-manager get page"""
-    contents = "<br>\n".join(
-        (
-            htmlgen.input_field(
+    contents = htmlgen.input_field(
                 "new_account_username",
                 "New Account Username (3-16 lowercase characters)",
                 attrs={
@@ -701,10 +699,7 @@ def generate_invite_manager_get() -> str:
                     "placeholder": "LPS Staff Username",
                     "pattern": "[a-z]{3,16}",
                 },
-            ),
-            "",
-        )
-    )
+            )
     form = htmlgen.form(
         "invite-manager",
         contents,
