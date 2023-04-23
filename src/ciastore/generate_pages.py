@@ -691,15 +691,15 @@ def generate_invite_teacher_post() -> str:
 def generate_invite_manager_get() -> str:
     """Generate /invite-manager get page"""
     contents = htmlgen.input_field(
-                "new_account_username",
-                "New Account Username (3-16 lowercase characters)",
-                attrs={
-                    "autofocus": "",
-                    "required": "",
-                    "placeholder": "LPS Staff Username",
-                    "pattern": "[a-z]{3,16}",
-                },
-            )
+        "new_account_username",
+        "New Account Username (3-16 lowercase characters)",
+        attrs={
+            "autofocus": "",
+            "required": "",
+            "placeholder": "LPS Staff Username",
+            "pattern": "[a-z]{3,16}",
+        },
+    )
     form = htmlgen.form(
         "invite-manager",
         contents,
