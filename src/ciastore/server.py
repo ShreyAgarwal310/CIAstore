@@ -11,13 +11,13 @@ __version__ = "0.0.0"
 
 
 import functools
+import logging
 import math
 import secrets
 import socket
 import sys
 import time
 import uuid
-import warnings
 from os import getenv, path
 from pathlib import Path
 from typing import (Any, AsyncIterator, Awaitable, Callable, Final, TypeVar,
@@ -37,10 +37,11 @@ from werkzeug import Response as wkresp
 from werkzeug.exceptions import HTTPException
 
 from ciastore import backups, database, elapsed, security
-from ciastore.logger import log
 
+DOMAIN: str | None = getenv("DOMAIN", None)
+FORMAT = "[%(module)s] [%(asctime)s] [%(levelname)s] %(message)s"
+logging.basicConfig(format=FORMAT, level=logging.DEBUG, force=True)
 load_dotenv()
-DOMAIN: str | None = None
 PEPPER: Final = getenv("COOKIE_SECRET", "")
 
 
@@ -145,10 +146,9 @@ def login_require_only(
             username = get_login_from_cookie_data(current_user.auth_id)
 
             if username is None or username not in users:
-                log(
+                logging.error(
                     f"Invalid login UUID {current_user.auth_id} "
                     "in authenticated user",
-                    2,
                 )
                 logout_user()
                 raise Unauthorized()
@@ -240,7 +240,7 @@ def get_login_from_cookie_data(code: str) -> str | None:
         return None
     # If expires not exist in entry or time expired, is bad and delete entry
     if entry.get("expires", -math.inf) < int(time.time()):
-        log(f"Login UUID {code!r} expired")
+        logging.info(f"Login UUID {code!r} expired")
         del logins[code]
         logins.write_file()
         return None
@@ -255,8 +255,7 @@ def create_uninitialized_account(
     users = database.load(app.root_path / "records" / "users.json")
     if username in users:
         error = f"Attempted to create new account for {username} which exists"
-        warnings.warn(error, stacklevel=2)
-        log(error, 2)
+        logging.error(error)
         return
     users[username] = {
         "status": "not_created",
@@ -264,7 +263,7 @@ def create_uninitialized_account(
     if type_ is not None:
         users[username]["type"] = type_
     users.write_file()
-    log(f"Created uninitialized account {username!r}")
+    logging.info(f"Created uninitialized account {username!r}")
 
 
 def add_tickets_to_user(username: str, count: int) -> None:
@@ -278,7 +277,7 @@ def add_tickets_to_user(username: str, count: int) -> None:
     assert username in users, "Create uninitialized should have made account!"
     users[username]["tickets"] = users[username].get("tickets", 0) + count
     users.write_file()
-    log(f"User {username!r} recieved {count!r} tickets")
+    logging.info(f"User {username!r} recieved {count!r} tickets")
 
 
 def get_user_ticket_count(username: str) -> int:
@@ -327,7 +326,7 @@ def convert_joining(code: str) -> bool:
     users = database.load(app.root_path / "records" / "users.json")
     usernames = get_user_by(join_code=code, status="joining")
     if len(usernames) != 1:
-        log(f"Invalid code {code!r}")
+        logging.info(f"Invalid code {code!r}")
         return False
     username = usernames.pop()
 
@@ -342,7 +341,7 @@ def convert_joining(code: str) -> bool:
         users.write_file()
 
         delta = elapsed.get_elapsed(now - expires)
-        log(f"{username!r} join code expired by {delta}")
+        logging.info(f"{username!r} join code expired by {delta}")
         return False
 
     users[username]["status"] = "created"
@@ -350,7 +349,7 @@ def convert_joining(code: str) -> bool:
 
     user = AuthUser(create_login_cookie_data(username))
     login_user(user)
-    log(f"User {username!r} logged in from join code")
+    logging.info(f"User {username!r} logged in from join code")
 
     return True
 
@@ -476,7 +475,7 @@ async def send_error(
 #            }
 #        )
 #        users.write_file()
-#        log(f"User {username!r} signed up")
+#        logging.info(f"User {username!r} signed up")
 #
 #    return await stream_template(
 #        "signup_post.html.jinja",
@@ -542,7 +541,7 @@ async def login_post() -> AsyncIterator[str] | wkresp:
 
     user = AuthUser(create_login_cookie_data(username))
     login_user(user)
-    log(f"User {username!r} logged in")
+    logging.info(f"User {username!r} logged in")
 
     return app.redirect("/")
 
@@ -555,9 +554,9 @@ async def logout() -> wkresp:
         assert code is not None
         username = get_login_from_cookie_data(code)
         if username is not None:
-            log(f"User {username!r} ({code}) logged out")
+            logging.info(f"User {username!r} ({code}) logged out")
         else:
-            log(f"Invalid UUID {code} logged out", 2)
+            logging.error(f"Invalid UUID {code} logged out")
     logout_user()
     return app.redirect("login")
 
@@ -573,15 +572,14 @@ async def logout() -> wkresp:
 #    username = get_login_from_cookie_data(current_user.auth_id)
 #
 #    if username is None or username not in users:
-#        log(
+#        logging.error(
 #            f"Invalid login UUID {current_user.auth_id} "
 #            "in authenticated user",
-#            2,
 #        )
 #        logout_user()
 #        return app.redirect("login")
 #    user = users[username] | {"username": username}
-#    log(f"Record dump for {username!r}", level=0)
+#    logging.debug(f"Record dump for {username!r}")
 #    return Response(
 #        json.dumps(user, sort_keys=True),
 #        content_type="application/json",
@@ -721,10 +719,9 @@ async def settings_password_post() -> AsyncIterator[str] | wkresp:
     username = get_login_from_cookie_data(current_user.auth_id)
 
     if username is None or username not in users:
-        log(
+        logging.error(
             f"Invalid login UUID {current_user.auth_id} "
             "in authenticated user",
-            2,
         )
         logout_user()
         return app.redirect("login")
@@ -754,7 +751,9 @@ async def settings_password_post() -> AsyncIterator[str] | wkresp:
         current_password, users[username]["password"], PEPPER
     ):
         # Bad password
-        log(f"{username!r} did not enter own password in change password")
+        logging.info(
+            f"{username!r} did not enter own password in " + "change password"
+        )
         return await send_error(
             "Password Does Not Match Error",
             "Entered password does not match current password.",
@@ -765,7 +764,7 @@ async def settings_password_post() -> AsyncIterator[str] | wkresp:
         new_password, PEPPER
     )
     users.write_file()
-    log(f"{username!r} changed their password")
+    logging.info(f"{username!r} changed their password")
 
     return await stream_template(
         "settings_change_password_post.html.jinja",
@@ -792,10 +791,9 @@ async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
     creator_username = get_login_from_cookie_data(current_user.auth_id)
 
     if creator_username is None or creator_username not in users:
-        log(
+        logging.error(
             f"Invalid login UUID {current_user.auth_id} "
             "in authenticated user",
-            2,
         )
         logout_user()
         return app.redirect("login")
@@ -850,7 +848,9 @@ async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
 
     users.write_file()
 
-    log(f"{creator_username!r} invited {new_account_username!r} as teacher")
+    logging.info(
+        f"{creator_username!r} invited {new_account_username!r} as teacher"
+    )
 
     return await stream_template(
         "invite_teacher_post.html.jinja",
@@ -879,10 +879,9 @@ async def invite_manager_post() -> AsyncIterator[str] | wkresp:
     creator_username = get_login_from_cookie_data(current_user.auth_id)
 
     if creator_username is None or creator_username not in users:
-        log(
+        logging.error(
             f"Invalid login UUID {current_user.auth_id} "
             "in authenticated user",
-            2,
         )
         logout_user()
         return app.redirect("login")
@@ -937,7 +936,9 @@ async def invite_manager_post() -> AsyncIterator[str] | wkresp:
 
     users.write_file()
 
-    log(f"{creator_username!r} invited {new_account_username!r} as manager")
+    logging.info(
+        f"{creator_username!r} invited {new_account_username!r} as manager"
+    )
 
     return await stream_template(
         "invite_manager_post.html.jinja",
@@ -1025,10 +1026,9 @@ async def root_get() -> AsyncIterator[str] | wkresp:
         loaded_user = get_login_from_cookie_data(current_user.auth_id)
 
         if loaded_user is None or loaded_user not in users:
-            log(
+            logging.error(
                 f"Invalid login UUID {current_user.auth_id} "
                 "in authenticated user",
-                2,
             )
             logout_user()
             return app.redirect("login")
@@ -1109,10 +1109,10 @@ async def run_async(
 
         await serve(app, config_obj)
     except socket.error:
-        log(f"Cannot bind to IP address '{ip_addr}' port {port}", 2)
+        logging.error(f"Cannot bind to IP address '{ip_addr}' port {port}")
         sys.exit(1)
     except KeyboardInterrupt:
-        log("Shutting down from keyboard interrupt")
+        logging.info("Shutting down from keyboard interrupt")
 
 
 def run() -> None:
@@ -1151,9 +1151,18 @@ or set COOKIE_SECRET environment variable."""
     )
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Call run after setup"""
     print(f"{__title__}\nProgrammed by {__author__}.\n")
     try:
-        run()
+        logging.captureWarnings(True)
+        try:
+            run()
+        finally:
+            database.unload_all()
     finally:
-        database.unload_all()
+        logging.shutdown()
+
+
+if __name__ == "__main__":
+    main()

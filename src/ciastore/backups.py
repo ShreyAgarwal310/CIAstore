@@ -9,13 +9,13 @@
 __title__ = "Backups"
 __author__ = "CoolCat467"
 
+import logging
 import time
 from os import path
 
 import trio
 
 from ciastore import database
-from ciastore.logger import log
 
 
 async def backup_database() -> None:
@@ -61,9 +61,9 @@ async def backup_database() -> None:
 
 async def backup() -> None:
     """Backup all records"""
-    log("Preforming backup")
+    logging.info("Preforming backup")
     await backup_database()
-    log("Backup complete")
+    logging.info("Backup complete")
 
 
 async def periodic_backups() -> None:

@@ -1,3 +1,3 @@
-from ciastore.server import run
+from ciastore.server import main
 
-run()
+main()
