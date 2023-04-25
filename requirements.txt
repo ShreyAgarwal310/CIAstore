@@ -1,5 +1,5 @@
 Werkzeug==2.2.3
-hypercorn==0.14.3
+hypercorn[trio]==0.14.3
 quart-trio==0.10.0
 quart==0.18.4
 trio==0.22.0

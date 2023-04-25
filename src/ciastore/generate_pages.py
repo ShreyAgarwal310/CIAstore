@@ -475,7 +475,7 @@ def generate_subtract_tickets_post() -> str:
                     "p",
                     "Subtracted {{ ticket_count }} ticket{{ plural }} "
                     "from {{ student_id }}. They now have {{ tickets_left }} "
-                    "ticket{{ plural }}.",
+                    "ticket{{ plural_left }}.",
                     block=False,
                 )
             ),
@@ -501,7 +501,7 @@ def generate_settings_get() -> str:
     }
     body = "\n".join(
         (
-            htmlgen.link_list(links),
+            htmlgen.contain_in_box(htmlgen.link_list(links)),
             htmlgen.tag("br"),
             htmlgen.tag("br"),
             htmlgen.wrap_tag("p", "Links:", block=False),
@@ -569,8 +569,10 @@ def generate_settings_change_password_post() -> str:
     """Generate /settings/change-password post page"""
     body = "\n".join(
         (
-            htmlgen.wrap_tag(
-                "p", "Password changed successfully", block=False
+            htmlgen.contain_in_box(
+                htmlgen.wrap_tag(
+                    "p", "Password changed successfully", block=False
+                )
             ),
             htmlgen.tag("br"),
             htmlgen.tag("br"),
@@ -590,20 +592,15 @@ def generate_settings_change_password_post() -> str:
 @save_template_as("invite_teacher_get")
 def generate_invite_teacher_get() -> str:
     """Generate /invite-teacher get page"""
-    contents = "<br>\n".join(
-        (
-            htmlgen.input_field(
-                "new_account_username",
-                "New Account Username (3-16 lowercase characters)",
-                attrs={
-                    "autofocus": "",
-                    "required": "",
-                    "placeholder": "LPS Staff Username",
-                    "pattern": "[a-z]{3,16}",
-                },
-            ),
-            "",
-        )
+    contents = htmlgen.input_field(
+        "new_account_username",
+        "New Account Username (3-16 lowercase characters)",
+        attrs={
+            "autofocus": "",
+            "required": "",
+            "placeholder": "LPS Staff Username",
+            "pattern": "[a-z]{3,16}",
+        },
     )
     form = htmlgen.form(
         "invite-teacher",

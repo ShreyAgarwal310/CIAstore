@@ -10,7 +10,6 @@ __version__ = "0.0.0"
 import csv
 from os import makedirs, path
 from pathlib import Path
-from typing import Any
 
 import trio
 
@@ -19,8 +18,31 @@ from ciastore.database import Table
 _LOADED: dict[str, "CSVRecords"] = {}
 
 
-class CSVRecords(dict[str, Any]):
-    """Database dict with file read write functions"""
+def _escape(raw_value: object) -> str:
+    """Escape CSV value
+
+    Escape CSV value as per RFC-4180"""
+    if isinstance(raw_value, str):
+        value = raw_value
+    else:
+        value = repr(raw_value)
+
+    need_quotes = False
+    if '"' in value:
+        need_quotes = True
+        value = value.replace('"', '""')
+    else:
+        for char in value:
+            if char in {",", "\n", "\r"}:
+                need_quotes = True
+                break
+    if need_quotes:
+        value = f'"{value}"'
+    return value
+
+
+class CSVRecords(dict[str, dict[str, str | int]]):
+    """Records dict with CSV file read write functions"""
 
     __slots__ = ("file", "key_name", "__weakref__", "_lock")
 
@@ -44,14 +66,30 @@ class CSVRecords(dict[str, Any]):
             reader = csv.reader(csv_file, dialect="unix")
             keys = next(reader)
             for row in reader:
-                entry = {}
+                entry: dict[str, str | int] = {}
                 entry_name = ""
                 for i, value in enumerate(row):
                     if not i:  # i == 0
                         entry_name = value
                     else:
+                        if value.isdecimal():
+                            try:
+                                entry[keys[i]] = int(value)
+                                continue
+                            except ValueError:
+                                pass
                         entry[keys[i]] = value
                 self[entry_name] = entry
+
+    def sync_write_file(self) -> None:
+        """Write database file synchronously (avoid if possible)"""
+        folder = Path(path.dirname(self.file))
+        if not folder.exists():
+            makedirs(folder, exist_ok=True)
+        with open(self.file, encoding="utf-8") as csv_file:
+            writer = csv.writer(csv_file, dialect="unix")
+            table = Table(self, self.key_name)
+            writer.writerows(table.column_and_rows())
 
     async def async_write_file(self) -> None:
         """Write database file asynchronously"""
@@ -63,39 +101,17 @@ class CSVRecords(dict[str, Any]):
             async with await trio.open_file(
                 self.file, "w", encoding="utf-8"
             ) as file:
-                keys = table.keys()
-                await file.write(",".join(keys))
-                await file.write("\n")
-                for entry_name, value in self.items():
-                    await file.write(entry_name)
-                    for key in keys:
-                        if key == self.key_name:
-                            continue
-                        await file.write(f",{value.get(key, '')}")
+                for row in table.column_and_rows():
+                    for idx, value in enumerate(row):
+                        if idx:  # If not first value, add comma
+                            await file.write(",")
+                        await file.write(_escape(value))
                     await file.write("\n")
 
 
-#    @staticmethod
-#    def _write_row(
-#        values: Iterable[int | float | str],
-#    ) -> Generator[str, None, None]:
-#        for value in values:
-#            if isinstance(value, str):
-#                need_quote = False
-#                if value.endswith("\n"):
-#                    value = value.replace("\n", "")
-#                    need_quote = True
-#                if " " in value:
-#                    need_quote = True
-#                if need_quote:
-#                    yield f'"{value}"'
-#                else:
-#                    yield value
-#            elif isinstance(value, (int, float)):
-#                yield str(value)
-
-
-def load(file_path: str | Path, key_name: str | None = None) -> CSVRecords:
+def load(
+    file_path: str | Path | trio.Path, key_name: str | None = None
+) -> CSVRecords:
     """Load database from file path or return already loaded instance
 
     Key name can only be none if already loaded. If already loaded,
@@ -114,7 +130,7 @@ def get_loaded() -> set[str]:
     return set(_LOADED)
 
 
-async def unload(file_path: str | Path) -> None:
+async def unload(file_path: str | Path | trio.Path) -> None:
     """If database loaded, write file and unload"""
     file = path.abspath(file_path)
     if file not in get_loaded():

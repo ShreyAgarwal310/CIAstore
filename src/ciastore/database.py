@@ -114,11 +114,18 @@ class Table:
             items.append((key, self[key]))
         return tuple(items)
 
-    def rows(self) -> Generator[tuple[Any, ...], None, None]:
-        """Return generator of each row"""
-        columns = self.keys() - {self._key_name}
+    def column_and_rows(self) -> Generator[tuple[str | Any, ...], None, None]:
+        """Yield tuple of column row and then rows in column order"""
+        columns = tuple(self.keys() - {self._key_name})
+        yield columns
         for key, value in self._records.items():
             yield (key,) + tuple(value.get(col) for col in columns)
+
+    def rows(self) -> Generator[tuple[Any, ...], None, None]:
+        """Yield each row"""
+        gen = self.column_and_rows()
+        _ = next(gen)
+        yield from gen
 
     def __len__(self) -> int:
         return len(self._records)

@@ -13,12 +13,11 @@ __version__ = "0.0.0"
 import functools
 import logging
 import math
-import secrets
 import socket
 import sys
 import time
 import uuid
-from os import getenv, path
+from os import getenv, makedirs, path
 from pathlib import Path
 from typing import (Any, AsyncIterator, Awaitable, Callable, Final, TypeVar,
                     cast)
@@ -29,18 +28,37 @@ from dotenv import load_dotenv
 from hypercorn.config import Config
 from hypercorn.trio import serve
 from quart import Response, request
-from quart.templating import render_template, stream_template
+from quart.templating import stream_template
 from quart_auth import (AuthManager, AuthUser, Unauthorized, current_user,
                         login_required, login_user, logout_user)
 from quart_trio import QuartTrio
 from werkzeug import Response as wkresp
 from werkzeug.exceptions import HTTPException
 
-from ciastore import backups, database, elapsed, security
+from ciastore import backups, csvrecords, database, elapsed, security
 
 DOMAIN: str | None = getenv("DOMAIN", None)
-FORMAT = "[%(module)s] [%(asctime)s] [%(levelname)s] %(message)s"
+
+FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s"
+
+ROOT_FOLDER = trio.Path(path.dirname(__file__))
+CURRENT_LOG = ROOT_FOLDER / "logs" / "current.log"
+
+if not path.exists(path.dirname(CURRENT_LOG)):
+    makedirs(path.dirname(CURRENT_LOG))
+
 logging.basicConfig(format=FORMAT, level=logging.DEBUG, force=True)
+logging.getLogger().addHandler(
+    logging.handlers.TimedRotatingFileHandler(
+        CURRENT_LOG,
+        when="D",
+        backupCount=60,
+        encoding="utf-8",
+        utc=True,
+        delay=True,
+    )
+)
+
 load_dotenv()
 PEPPER: Final = getenv("COOKIE_SECRET", "")
 
@@ -85,7 +103,7 @@ AuthManager(app)
 
 # Attributes users might have and what they do:
 # password : sha3_256 hash of password as string
-# type : "student", "teacher"
+# type : "student", "teacher", "manager", "admin"
 # status : "not_created", "joining", "created_auto_password", "created"
 #   Not created is when teacher has assigned points but student has not
 #     set up account yet.
@@ -97,7 +115,6 @@ AuthManager(app)
 #   Created is when join code link visited and account is verified.
 # join_code : None or string of join code UUID
 # join_code_expires : UNIX epoch time after which join code is expired
-# tickets : Number of tickets account has
 
 
 def get_user_by(**kwargs: str) -> set[str]:
@@ -170,15 +187,45 @@ def login_require_only(
     return get_wrapper
 
 
+async def send_error(
+    page_title: str,
+    error_body: str,
+    return_link: str | None = None,
+) -> AsyncIterator[str]:
+    """Stream error page"""
+    return await stream_template(
+        "error_page.html.jinja",
+        page_title=page_title,
+        error_body=error_body,
+        return_link=return_link,
+    )
+
+
 async def get_exception_page(code: int, name: str, desc: str) -> Response:
     """Return Response for exception"""
-    resp_body = await render_template(
-        "exception_page.html.jinja",
-        code=code,
-        name=name,
-        desc=desc,
+    resp_body = await send_error(
+        page_title=f"{code} {name}",
+        error_body=desc,
     )
-    return Response(resp_body, status=code)
+    # Response body can be AsyncIterator, type var is not correct
+    return Response(resp_body, status=code)  # type: ignore[type-var]
+
+
+def pretty_exception_name(exc: BaseException) -> str:
+    """Make exception into pretty text (split by spaces)"""
+    exc_str = repr(exc).split("(", 1)[0]
+    words = []
+    last = 0
+    for idx, char in enumerate(exc_str):
+        if char.islower():
+            continue
+        word = exc_str[last:idx]
+        if not word:
+            continue
+        words.append(word)
+        last = idx
+    words.append(exc_str[last:])
+    return " ".join((w for w in words if w not in {"Error", "Exception"}))
 
 
 def pretty_exception(function: Handler) -> Handler:
@@ -186,16 +233,32 @@ def pretty_exception(function: Handler) -> Handler:
 
     @functools.wraps(function)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        code = None
+        name = "Exception"
+        desc = None
         try:
             return await function(*args, **kwargs)
         except HTTPException as exception:
-            code = exception.code or 404
-            desc = exception.description or "An error occured"
-            return await get_exception_page(
-                code,
-                exception.name,
-                desc,
-            )
+            logging.error(exception, exc_info=sys.exc_info())
+            code = exception.code
+            desc = exception.description
+            name = exception.name
+        except Exception as exception:
+            logging.error(exception, exc_info=sys.exc_info())
+            exc_name = pretty_exception_name(exception)
+            name = f"Internal Server Error ({exc_name})"
+        code = code or 500
+        desc = desc or (
+            "The server encountered an internal error and "
+            + "was unable to complete your request. "
+            + "Either the server is overloaded or there is an error "
+            + "in the application."
+        )
+        return await get_exception_page(
+            code,
+            name,
+            desc,
+        )
 
     return cast(Handler, wrapper)
 
@@ -253,6 +316,7 @@ def create_uninitialized_account(
 ) -> None:
     """Create uninitialized account. If type is None do not set."""
     users = database.load(app.root_path / "records" / "users.json")
+
     if username in users:
         error = f"Attempted to create new account for {username} which exists"
         logging.error(error)
@@ -266,48 +330,63 @@ def create_uninitialized_account(
     logging.info(f"Created uninitialized account {username!r}")
 
 
-def add_tickets_to_user(username: str, count: int) -> None:
+async def add_tickets_to_user(username: str, count: int) -> None:
     """Add ticket count to username. Create account if it doesn't exist."""
     assert count > 0, f"Use subtract_user_tickets instead of adding {count}"
 
-    users = database.load(app.root_path / "records" / "users.json")
+    records = csvrecords.load(
+        app.root_path / "records" / "tickets.csv", "student_id"
+    )
 
-    if username not in users:
-        create_uninitialized_account(username)
-    assert username in users, "Create uninitialized should have made account!"
-    users[username]["tickets"] = users[username].get("tickets", 0) + count
-    users.write_file()
-    logging.info(f"User {username!r} recieved {count!r} tickets")
+    if username not in records:
+        records[username] = {}
+
+    current_tickets = get_user_ticket_count(username)
+    assert isinstance(current_tickets, int)
+
+    records[username]["tickets"] = current_tickets + count
+    await records.async_write_file()
+    logging.info(f"User {username!r} recieved {count!r} ticket(s)")
 
 
 def get_user_ticket_count(username: str) -> int:
     """Get number of tickets user has at this time
 
     Raises LookupError if username does not exist"""
-    users = database.load(app.root_path / "records" / "users.json")
+    records = csvrecords.load(
+        app.root_path / "records" / "tickets.csv", "student_id"
+    )
 
-    if username not in users:
+    if username not in records:
         raise LookupError(f"User {username!r} does not exist")
 
-    count = users[username].get("tickets", 0)
-    assert isinstance(count, int)
+    raw_count: str | int = records[username].get("tickets", 0)
+    if isinstance(raw_count, int):
+        return raw_count
+    assert isinstance(raw_count, str)
+    if not raw_count.isdecimal():
+        logging.error(
+            f"Count from tickets was {raw_count!r} instead of decimal"
+        )
+        return 0
+    return int(raw_count)
 
-    return count
 
-
-def subtract_user_tickets(username: str, count: int) -> int:
+async def subtract_user_tickets(username: str, count: int) -> int:
     """Remove tickets from user. Return number of tickets left.
 
     Raises LookupError if username does not exist
     Raises ValueError if count is greater than number of tickets in account"""
     assert count > 0, f"Use add_user_tickets instead of subtracting {count}"
 
-    users = database.load(app.root_path / "records" / "users.json")
+    records = csvrecords.load(
+        app.root_path / "records" / "tickets.csv", "student_id"
+    )
 
-    if username not in users:
+    if username not in records:
         raise LookupError(f"User {username!r} does not exist")
 
-    current_tickets = users[username].get("tickets", 0)
+    current_tickets = get_user_ticket_count(username)
 
     assert isinstance(current_tickets, int)
     new = current_tickets - count
@@ -316,7 +395,11 @@ def subtract_user_tickets(username: str, count: int) -> int:
         raise ValueError(
             f"Insufficiant tickets for user {username!r} to subtract {count}"
         )
-    users[username]["tickets"] = new
+    records[username]["tickets"] = new
+
+    await records.async_write_file()
+    logging.info(f"User {username!r} lost {count!r} ticket(s)")
+
     return new
 
 
@@ -352,20 +435,6 @@ def convert_joining(code: str) -> bool:
     logging.info(f"User {username!r} logged in from join code")
 
     return True
-
-
-async def send_error(
-    page_title: str,
-    error_body: str,
-    return_link: str | None = None,
-) -> AsyncIterator[str]:
-    """Stream error page"""
-    return await stream_template(
-        "error_page.html.jinja",
-        page_title=page_title,
-        error_body=error_body,
-        return_link=return_link,
-    )
 
 
 # @app.get("/signup")
@@ -618,7 +687,7 @@ async def add_tickets_post() -> AsyncIterator[str]:
             "Ticket Count Error", "Ticket count is not in range.", request.url
         )
 
-    add_tickets_to_user(student_id, ticket_count)
+    await add_tickets_to_user(student_id, ticket_count)
 
     plural = "" if ticket_count < 2 else "s"
     return await stream_template(
@@ -662,7 +731,7 @@ async def subtract_tickets_post() -> AsyncIterator[str]:
         )
 
     try:
-        tickets_left = subtract_user_tickets(student_id, ticket_count)
+        tickets_left = await subtract_user_tickets(student_id, ticket_count)
     except LookupError:
         # Username not exist
         return await send_error(
@@ -680,10 +749,12 @@ async def subtract_tickets_post() -> AsyncIterator[str]:
         )
 
     plural = "" if ticket_count < 2 else "s"
+    plural_left = "" if tickets_left < 2 else "s"
     return await stream_template(
         "subtract_tickets_post.html.jinja",
         ticket_count=ticket_count,
         plural=plural,
+        plural_left=plural_left,
         student_id=student_id,
         tickets_left=tickets_left,
     )
@@ -838,7 +909,7 @@ async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
                 request.url,
             )
 
-    password = secrets.token_urlsafe(16)
+    password = security.create_new_password(16)
 
     users[new_account_username] = {
         "password": security.create_new_login_credentials(password, PEPPER),
@@ -926,7 +997,7 @@ async def invite_manager_post() -> AsyncIterator[str] | wkresp:
                 request.url,
             )
 
-    password = secrets.token_urlsafe(16)
+    password = security.create_new_password(16)
 
     users[new_account_username] = {
         "password": security.create_new_login_credentials(password, PEPPER),
@@ -1072,9 +1143,6 @@ async def run_async(
         config = {
             "bind": [location],
             "worker_class": "trio",
-            "errorlog": path.join(
-                root_dir, "logs", time.strftime("log_%Y_%m_%d.log")
-            ),
         }
         if DOMAIN:
             config[

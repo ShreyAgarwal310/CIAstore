@@ -136,6 +136,11 @@ async def compare_hash(
     return is_equal
 
 
+def create_new_password(min_length: int) -> str:
+    """Create a new secure password"""
+    return secrets.token_urlsafe(min_length)
+
+
 # def time_function(
 #     function: Callable[..., T], *args: Any, **kwargs: Any
 # ) -> tuple[T, int]:

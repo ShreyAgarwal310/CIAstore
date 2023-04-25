@@ -171,3 +171,7 @@ async def test_compare_hash_wrong() -> None:
         "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$eA5A53S/Kl11r7a9Q9YzjBVUDuh4i4Nn0cNl282+Xts=",
         "peppers",
     )
+
+
+def test_create_new_password() -> None:
+    assert security.create_new_password(12) == "uX9p917fNccf2tNw"
