@@ -1,7 +1,7 @@
-Werkzeug==2.3.2
 hypercorn[trio]==0.14.3
-quart-trio==0.10.0
-quart==0.18.4
-trio==0.22.0
-quart-auth==0.8.0 
 python-dotenv==1.0.0
+quart==0.18.4
+quart-auth==0.8.0
+quart-trio==0.10.0
+trio==0.22.0
+Werkzeug==2.3.2
