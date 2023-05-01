@@ -9,7 +9,7 @@ Created by members of Computer Science Honors Society
 Project requires Python 3.10 at a minimum to run, but 3.11 prefered
 
 How to run:
-    
+
 ```console
 python3.11 -m pip install -e CIAstore
 python3.11 -m ciastore
