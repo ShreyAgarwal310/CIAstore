@@ -17,7 +17,7 @@ def run() -> None:
     if username in users:
         print("User already exists!")
         return
-    server.create_uninitialized_account(username, "manager")
+    server.create_uninitialized_account(username, "admin")
     users[username]["status"] = "created"
     users[username]["password"] = security.create_new_login_credentials(
         new_password, server.PEPPER

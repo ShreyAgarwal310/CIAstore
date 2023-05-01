@@ -12,7 +12,6 @@ __version__ = "0.0.0"
 
 import functools
 import logging
-import math
 import socket
 import sys
 import time
@@ -302,7 +301,7 @@ def get_login_from_cookie_data(code: str) -> str | None:
     if entry is None or not isinstance(entry, dict):
         return None
     # If expires not exist in entry or time expired, is bad and delete entry
-    if entry.get("expires", -math.inf) < int(time.time()):
+    if entry.get("expires", 0) < int(time.time()):
         logging.info(f"Login UUID {code!r} expired")
         del logins[code]
         logins.write_file()
@@ -396,6 +395,8 @@ async def subtract_user_tickets(username: str, count: int) -> int:
             f"Insufficiant tickets for user {username!r} to subtract {count}"
         )
     records[username]["tickets"] = new
+    if new == 0:  # Maybe free up a bit of memory then, since default is zero
+        del records[username]
 
     await records.async_write_file()
     logging.info(f"User {username!r} lost {count!r} ticket(s)")
@@ -415,7 +416,7 @@ def convert_joining(code: str) -> bool:
 
     # If expired, erase and continue
     now = int(time.time())
-    expires = users[username].get("join_code_expires", math.inf)
+    expires = users[username].get("join_code_expires", 0)
 
     del users[username]["join_code"]
     del users[username]["join_code_expires"]
@@ -657,7 +658,7 @@ async def logout() -> wkresp:
 
 @app.get("/add-tickets")
 @pretty_exception
-@login_require_only(type_={"teacher", "manager"})
+@login_require_only(type_={"teacher", "manager", "admin"})
 async def add_tickets_get() -> AsyncIterator[str]:
     """Add tickets page for teachers"""
     return await stream_template(
@@ -667,7 +668,7 @@ async def add_tickets_get() -> AsyncIterator[str]:
 
 @app.post("/add-tickets")
 @pretty_exception
-@login_require_only(type_={"teacher", "manager"})
+@login_require_only(type_={"teacher", "manager", "admin"})
 async def add_tickets_post() -> AsyncIterator[str]:
     """Handle post for add tickets form"""
     multi_dict = await request.form
@@ -689,7 +690,7 @@ async def add_tickets_post() -> AsyncIterator[str]:
 
     await add_tickets_to_user(student_id, ticket_count)
 
-    plural = "" if ticket_count < 2 else "s"
+    plural = "" if ticket_count == 1 else "s"
     return await stream_template(
         "add_tickets_post.html.jinja",
         ticket_count=ticket_count,
@@ -700,7 +701,7 @@ async def add_tickets_post() -> AsyncIterator[str]:
 
 @app.get("/subtract-tickets")
 @pretty_exception
-@login_require_only(type_="manager")
+@login_require_only(type_={"manager", "admin"})
 async def subtract_tickets_get() -> AsyncIterator[str]:
     """Subtract tickets page for managers"""
     return await stream_template(
@@ -710,7 +711,7 @@ async def subtract_tickets_get() -> AsyncIterator[str]:
 
 @app.post("/subtract-tickets")
 @pretty_exception
-@login_require_only(type_="manager")
+@login_require_only(type_={"manager", "admin"})
 async def subtract_tickets_post() -> AsyncIterator[str]:
     """Handle post for subtract tickets form"""
     multi_dict = await request.form
@@ -748,8 +749,8 @@ async def subtract_tickets_post() -> AsyncIterator[str]:
             request.url,
         )
 
-    plural = "" if ticket_count < 2 else "s"
-    plural_left = "" if tickets_left < 2 else "s"
+    plural = "" if ticket_count == 1 else "s"
+    plural_left = "" if tickets_left == 1 else "s"
     return await stream_template(
         "subtract_tickets_post.html.jinja",
         ticket_count=ticket_count,
@@ -844,7 +845,7 @@ async def settings_password_post() -> AsyncIterator[str] | wkresp:
 
 @app.get("/invite-teacher")
 @pretty_exception
-@login_require_only(type_={"teacher", "manager"})
+@login_require_only(type_="admin")
 async def invite_teacher_get() -> AsyncIterator[str]:
     """Create new teacher account"""
     return await stream_template(
@@ -854,7 +855,7 @@ async def invite_teacher_get() -> AsyncIterator[str]:
 
 @app.post("/invite-teacher")
 @pretty_exception
-@login_require_only(type_={"teacher", "manager"})
+@login_require_only(type_="admin")
 async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
     """Invite teacher form post handling"""
     assert current_user.auth_id is not None
@@ -890,7 +891,7 @@ async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
             request.url,
         )
 
-    possible_name = set("abcdefghijklmnopqrstuvwxyz0123456789")
+    possible_name = set("abcdefghijklmnopqrstuvwxyz23456789")
     if bool(set(new_account_username) - possible_name):
         return await send_error(
             "Invite User Error",
@@ -932,7 +933,7 @@ async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
 
 @app.get("/invite-manager")
 @pretty_exception
-@login_require_only(type_="manager")
+@login_require_only(type_="admin")
 async def invite_manager_get() -> AsyncIterator[str]:
     """Create a new manager account"""
     return await stream_template(
@@ -942,7 +943,7 @@ async def invite_manager_get() -> AsyncIterator[str]:
 
 @app.post("/invite-manager")
 @pretty_exception
-@login_require_only(type_="manager")
+@login_require_only(type_="admin")
 async def invite_manager_post() -> AsyncIterator[str] | wkresp:
     """Invite manager form post handling"""
     assert current_user.auth_id is not None
@@ -978,7 +979,7 @@ async def invite_manager_post() -> AsyncIterator[str] | wkresp:
             request.url,
         )
 
-    possible_name = set("abcdefghijklmnopqrstuvwxyz0123456789")
+    possible_name = set("abcdefghijklmnopqrstuvwxyz23456789")
     if bool(set(new_account_username) - possible_name):
         return await send_error(
             "Invite User Error",
@@ -1029,6 +1030,15 @@ async def ticket_get_form() -> AsyncIterator[str]:
 @pretty_exception
 async def ticket_count_page(username: str) -> AsyncIterator[str]:
     """Ticket count page for given username"""
+    user_type = None
+
+    if current_user.auth_id is not None:
+        users = database.load(app.root_path / "records" / "users.json")
+        logged_in_username = get_login_from_cookie_data(current_user.auth_id)
+
+        if logged_in_username is not None and logged_in_username in users:
+            user_type = users[logged_in_username].get("type")
+
     try:
         count = get_user_ticket_count(username)
     except LookupError:
@@ -1041,6 +1051,7 @@ async def ticket_count_page(username: str) -> AsyncIterator[str]:
         username=repr(username),
         count=repr(count),
         user_link=user_link,
+        user_type=user_type,
     )
 
 

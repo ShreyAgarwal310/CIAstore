@@ -4,4 +4,4 @@ quart==0.18.4
 quart-auth==0.8.0
 quart-trio==0.10.0
 trio==0.22.0
-Werkzeug==2.2.3
+Werkzeug==2.3.2

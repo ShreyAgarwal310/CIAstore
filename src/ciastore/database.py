@@ -117,7 +117,7 @@ class Table:
     def column_and_rows(self) -> Generator[tuple[str | Any, ...], None, None]:
         """Yield tuple of column row and then rows in column order"""
         columns = tuple(self.keys() - {self._key_name})
-        yield columns
+        yield (self._key_name,) + columns
         for key, value in self._records.items():
             yield (key,) + tuple(value.get(col) for col in columns)
 

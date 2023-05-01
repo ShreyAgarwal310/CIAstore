@@ -8,6 +8,9 @@ testpaths = [
     "tests",
 ]
 
+[mypy]
+plugins = ["trio_typing.plugin"]
+
 [tool.mypy]
 mypy_path = "src"
 check_untyped_defs = true
