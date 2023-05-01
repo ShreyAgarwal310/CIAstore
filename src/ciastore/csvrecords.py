@@ -64,21 +64,18 @@ class CSVRecords(dict[str, dict[str, str | int]]):
         """Reload database file"""
         with open(self.file, encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, dialect="unix")
-            keys = next(reader)
+            self.key_name, *keys = next(reader)
             for row in reader:
                 entry: dict[str, str | int] = {}
-                entry_name = ""
-                for i, value in enumerate(row):
-                    if not i:  # i == 0
-                        entry_name = value
-                    else:
-                        if value.isdecimal():
-                            try:
-                                entry[keys[i]] = int(value)
-                                continue
-                            except ValueError:
-                                pass
-                        entry[keys[i]] = value
+                entry_name, *values = row
+                for key, value in zip(keys, values):
+                    if value.isdecimal():
+                        try:
+                            entry[key] = int(value)
+                            continue
+                        except ValueError:
+                            pass
+                    entry[key] = value
                 self[entry_name] = entry
 
     def sync_write_file(self) -> None:
@@ -114,12 +111,11 @@ def load(
 ) -> CSVRecords:
     """Load database from file path or return already loaded instance
 
-    Key name can only be none if already loaded. If already loaded,
-    has no effect."""
+    If key name is none, read key name from the file"""
     file = path.abspath(file_path)
     if file not in _LOADED:
         if key_name is None:
-            raise ValueError("key_name must not be None when loading records")
+            key_name = ""
         lock = trio.StrictFIFOLock()
         _LOADED[file] = CSVRecords(file, key_name, lock)
     return _LOADED[file]

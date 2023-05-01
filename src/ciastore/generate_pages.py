@@ -292,6 +292,7 @@ def generate_signup_get() -> str:
                 "Username:",
                 attrs={
                     "placeholder": "Your LPS ID",
+                    "autocomplete": "off",
                     "autofocus": "",
                     "required": "",
                 },
@@ -346,13 +347,20 @@ def generate_login_get() -> str:
             htmlgen.input_field(
                 "username",
                 "Username:",
-                attrs={"placeholder": "Username"},
+                attrs={
+                    "placeholder": "Username",
+                    "autofocus": "",
+                    "required": "",
+                },
             ),
             htmlgen.input_field(
                 "password",
                 "Password:",
                 field_type="password",
-                attrs={"placeholder": "Password"},
+                attrs={
+                    "placeholder": "Password",
+                    "required": "",
+                },
             ),
         )
     )
@@ -381,6 +389,7 @@ def generate_add_tickets_get() -> str:
                 field_type="text",
                 attrs={
                     "autofocus": "",
+                    "autocomplete": "off",
                     "required": "",
                     "placeholder": "LPS Student ID",
                     "pattern": "[0-9]{6}",
@@ -423,6 +432,7 @@ def generate_add_tickets_post() -> str:
             htmlgen.link_list(
                 {
                     "/": "Return to main page",
+                    "/tickets": "Display tickets for user",
                     "/logout": "Log Out",
                 }
             ),
@@ -442,6 +452,7 @@ def generate_subtract_tickets_get() -> str:
                 field_type="text",
                 attrs={
                     "autofocus": "",
+                    "autocomplete": "off",
                     "required": "",
                     "placeholder": "LPS Student ID",
                     "pattern": "[0-9]{6}",
@@ -485,6 +496,7 @@ def generate_subtract_tickets_post() -> str:
             htmlgen.link_list(
                 {
                     "/": "Return to main page",
+                    "/tickets": "Display tickets for user",
                     "/logout": "Log Out",
                 }
             ),
@@ -527,6 +539,7 @@ def generate_settings_change_password_get() -> str:
                 field_type="password",
                 attrs={
                     "placeholder": "Your current password",
+                    "autofocus": "",
                     "required": "",
                 },
             ),
@@ -596,10 +609,11 @@ def generate_invite_teacher_get() -> str:
         "new_account_username",
         "New Account Username (3-16 lowercase characters)",
         attrs={
+            "placeholder": "LPS Staff Username",
+            "autocomplete": "off",
             "autofocus": "",
             "required": "",
-            "placeholder": "LPS Staff Username",
-            "pattern": "[a-z]{3,16}",
+            "pattern": "[a-z2-9]{3,16}",
         },
     )
     form = htmlgen.form(
@@ -691,10 +705,11 @@ def generate_invite_manager_get() -> str:
         "new_account_username",
         "New Account Username (3-16 lowercase characters)",
         attrs={
-            "autofocus": "",
-            "required": "",
             "placeholder": "LPS Staff Username",
-            "pattern": "[a-z]{3,16}",
+            "autofocus": "",
+            "autocomplete": "off",
+            "required": "",
+            "pattern": "[a-z2-9]{3,16}",
         },
     )
     form = htmlgen.form(
@@ -795,6 +810,9 @@ def generate_ticket_form() -> str:
                 attrs={
                     "placeholder": "Student ID Number",
                     "autocomplete": "off",
+                    "autofocus": "",
+                    "required": "",
+                    "pattern": "[0-9]{6}",  # If ever more than 6 change here
                 },
             ),
         )
@@ -823,6 +841,22 @@ def generate_ticket_form() -> str:
 @save_template_as("ticket_count_page")
 def generate_ticket_count_page() -> str:
     """Generate tickets get ticket count page"""
+    teacher_case = {
+        'user_type in ("teacher", "manager", "admin")': htmlgen.link_list(
+            {
+                "/add-tickets": "Add Tickets for Student",
+            }
+        )
+    }
+
+    manager_case = {
+        'user_type in ("manager", "admin")': htmlgen.link_list(
+            {
+                "/subtract-tickets": "Subtract Tickets for Student",
+            }
+        )
+    }
+
     body = "\n".join(
         (
             htmlgen.contain_in_box(
@@ -840,6 +874,8 @@ def generate_ticket_count_page() -> str:
                     "/": "Return to main page",
                 }
             ),
+            htmlgen.jinja_if_block(teacher_case),
+            htmlgen.jinja_if_block(manager_case),
         )
     )
     return template("Ticket Count", body)
@@ -851,18 +887,25 @@ def generate_root_get() -> str:
     login_link = htmlgen.create_link("/login", "this link")
 
     teacher_case = {
-        'user_type in ("teacher", "manager")': htmlgen.link_list(
+        'user_type in ("teacher", "manager", "admin")': htmlgen.link_list(
             {
                 "/add-tickets": "Add Tickets for Student",
-                "/invite-teacher": "Invite Teacher",
             }
         )
     }
 
     manager_case = {
-        'user_type in ("manager")': htmlgen.link_list(
+        'user_type in ("manager", "admin")': htmlgen.link_list(
             {
                 "/subtract-tickets": "Subtract Tickets for Student",
+            }
+        )
+    }
+
+    admin_case = {
+        'user_type in ("admin")': htmlgen.link_list(
+            {
+                "/invite-teacher": "Invite Teacher",
                 "/invite-manager": "Invite Manager",
             }
         )
@@ -903,6 +946,7 @@ def generate_root_get() -> str:
                             ),
                             htmlgen.jinja_if_block(teacher_case),
                             htmlgen.jinja_if_block(manager_case),
+                            htmlgen.jinja_if_block(admin_case),
                         )
                     ),
                 }

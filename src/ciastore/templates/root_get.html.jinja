@@ -31,15 +31,19 @@
         <li><a href="/settings">Account Settings</a></li>
         <li><a href="/tickets">View ticket count</a></li>
       </ul>
-      {% if user_type in ("teacher", "manager") %}
+      {% if user_type in ("teacher", "manager", "admin") %}
       <ul>
         <li><a href="/add-tickets">Add Tickets for Student</a></li>
-        <li><a href="/invite-teacher">Invite Teacher</a></li>
       </ul>
       {% endif %}
-      {% if user_type in ("manager") %}
+      {% if user_type in ("manager", "admin") %}
       <ul>
         <li><a href="/subtract-tickets">Subtract Tickets for Student</a></li>
+      </ul>
+      {% endif %}
+      {% if user_type in ("admin") %}
+      <ul>
+        <li><a href="/invite-teacher">Invite Teacher</a></li>
         <li><a href="/invite-manager">Invite Manager</a></li>
       </ul>
       {% endif %}
