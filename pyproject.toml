@@ -8,10 +8,8 @@ testpaths = [
     "tests",
 ]
 
-[mypy]
-plugins = ["trio_typing.plugin"]
-
 [tool.mypy]
+plugins = ["trio_typing.plugin"]
 mypy_path = "src"
 check_untyped_defs = true
 disallow_any_generics = true
@@ -33,3 +31,9 @@ warn_unused_ignores = true
 [tool.black]
 line-length = 79
 target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+combine_as_imports = true
+line_length = 79
+skip = [".git", ".github", ".venv"]

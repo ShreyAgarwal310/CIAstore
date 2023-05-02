@@ -1,5 +1,6 @@
 """HTML Generation - Generate HTML & CSS programatically"""
 
+from __future__ import annotations
 
 from collections.abc import Generator, Iterable
 
@@ -332,7 +333,7 @@ def jinja_comment(value: str) -> str:
     return f"{{# {value} #}}"
 
 
-def jinja_if_block(conditions: dict[str, str]) -> str:
+def jinja_if_block(conditions: dict[str, str], block: bool = True) -> str:
     """Generate jinja if / if else block from dictionary
 
     Keys are conditions to check, values are content if true"""
@@ -360,4 +361,103 @@ def jinja_if_block(conditions: dict[str, str]) -> str:
         contents.append(content)
         count += 1
     contents.append(jinja_statement("endif"))
-    return "\n".join(contents)
+    join = "\n" if block else ""
+    return join.join(contents)
+
+
+def jinja_for_loop(
+    results: Iterable[str],
+    iterate: str,
+    content: str,
+    filter_: str | None = None,
+    else_content: str | None = None,
+) -> str:
+    """Generate jinja for loop block
+
+    Ends up being `for {results} in {iterate}`"""
+    result_items = ", ".join(results)
+    filter_items = ""
+    if filter_:
+        filter_items = f" if {filter_}"
+    for_tag = jinja_statement(f"for {result_items} in {iterate}{filter_items}")
+    # content = indent(2, content)
+    end = jinja_statement("endfor")
+    if else_content:
+        else_block = jinja_statement("else")
+        # else_content = indent(2, else_content)
+        end = f"{else_block}\n{else_content}\n{end}"
+    return f"{for_tag}\n{content}\n{end}"
+
+
+def jinja_arg_tag(
+    type_: str, jinja_properties: Iterable[str], /, **kwargs: TagArg
+) -> str:
+    """Return HTML tag. Removes trailing underscore from argument names."""
+    args = " ".join(jinja_properties)
+    if args:
+        args = f" {args}"
+    if kwargs:
+        args = f"{args} " + " ".join(_generate_html_attributes(kwargs))
+    return f"<{type_}{args}>"
+
+
+def jinja_radio_select(
+    submit_name: str,
+    options_dict_name: str,
+    default: str | None = None,
+    else_content: str | None = None,
+) -> str:
+    """Create radio select from dictionary"""
+    count = jinja_expression("loop.index0")
+    cid = f"{submit_name}_{count}"
+    args = {
+        "type": "radio",
+        "id": cid,
+        "name": submit_name,
+        "value": jinja_expression("value"),
+    }
+    jinja_properties: tuple[str, ...] = ()
+    if default is not None:
+        default_tag = " ".join(
+            _generate_html_attributes({"checked": "checked"})
+        )
+        jinja_properties = (
+            jinja_if_block(
+                {f"value == {default}": default_tag},
+                block=False,
+            ),
+        )
+    return jinja_for_loop(
+        ("display", "value"),
+        f"{options_dict_name}.items()",
+        "\n".join(
+            (
+                jinja_arg_tag("input", jinja_properties, **args),
+                wrap_tag(
+                    "label", jinja_expression("display"), False, **{"for": cid}
+                ),
+                tag("br"),
+            )
+        ),
+        else_content=else_content,
+    )
+
+
+def jinja_bullet_list(
+    results: Iterable[str],
+    iterate: str,
+    content: str,
+    filter_: str | None = None,
+    else_content: str | None = None,
+) -> str:
+    """Return HTML bulleted list from values"""
+    return wrap_tag(
+        "ul",
+        jinja_for_loop(
+            results,
+            iterate,
+            wrap_tag("li", content, block=False),
+            filter_=filter_,
+            else_content=else_content,
+        ),
+    )

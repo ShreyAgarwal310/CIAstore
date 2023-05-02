@@ -378,3 +378,126 @@ def test_jinja_if_block_no_if_for_else_exception() -> None:
                 "": "yay newfrien",
             }
         )
+
+
+def test_jinja_for_loop() -> None:
+    assert (
+        htmlgen.jinja_for_loop(
+            ("element",),
+            "elements",
+            "{{ loop.index }} - {{ element }}",
+        )
+        == """{% for element in elements %}
+{{ loop.index }} - {{ element }}
+{% endfor %}"""
+    )
+
+
+def test_jinja_for_loop_filter() -> None:
+    assert (
+        htmlgen.jinja_for_loop(
+            ("element",),
+            "elements",
+            "{{ loop.index }} - {{ element }}",
+            "element.startswith('cat')",
+        )
+        == """{% for element in elements if element.startswith('cat') %}
+{{ loop.index }} - {{ element }}
+{% endfor %}"""
+    )
+
+
+def test_jinja_for_loop_else_content() -> None:
+    assert (
+        htmlgen.jinja_for_loop(
+            ("element",),
+            "elements",
+            "{{ loop.index }} - {{ element }}",
+            "element.startswith('cat')",
+            "There are no cat elements",
+        )
+        == """{% for element in elements if element.startswith('cat') %}
+{{ loop.index }} - {{ element }}
+{% else %}
+There are no cat elements
+{% endfor %}"""
+    )
+
+
+@pytest.mark.parametrize(
+    "type_,props,args,expect",
+    (
+        ("p", ("jinja",), {}, "<p jinja>"),
+        ("p", (), {"fish": "false"}, '<p fish="false">'),
+        ("p", ("jinja",), {"fish": "false"}, '<p jinja fish="false">'),
+        ("i", (), {}, "<i>"),
+        (
+            "input",
+            (),
+            {"type": "radio", "id": "0", "name": "test", "value_": "Example"},
+            '<input type="radio" id="0" name="test" value="Example">',
+        ),
+        (
+            "input",
+            ("jinja",),
+            {"type": "radio", "id": "0", "name": "test", "value_": "Example"},
+            '<input jinja type="radio" id="0" name="test" value="Example">',
+        ),
+    ),
+)
+def test_jinja_arg_tag(
+    type_: str, props: tuple[str, ...], args: dict[str, str], expect: str
+) -> None:
+    assert htmlgen.jinja_arg_tag(type_, props, **args) == expect
+
+
+def test_jinja_radio_select() -> None:
+    assert (
+        htmlgen.jinja_radio_select("submits", "option_data")
+        == """{% for display, value in option_data.items() %}
+<input type="radio" id="submits_{{ loop.index0 }}" name="submits" value="{{ value }}">
+<label for="submits_{{ loop.index0 }}">{{ display }}</label>
+<br>
+{% endfor %}"""
+    )
+
+
+def test_jinja_radio_select_default() -> None:
+    assert (
+        htmlgen.jinja_radio_select("submits", "option_data", "default text")
+        == """{% for display, value in option_data.items() %}
+<input {% if value == default text %}checked="checked"{% endif %} type="radio" id="submits_{{ loop.index0 }}" name="submits" value="{{ value }}">
+<label for="submits_{{ loop.index0 }}">{{ display }}</label>
+<br>
+{% endfor %}"""
+    )
+
+
+def test_jinja_radio_select_else_content() -> None:
+    assert (
+        htmlgen.jinja_radio_select(
+            "submits", "option_data", else_content="default text"
+        )
+        == """{% for display, value in option_data.items() %}
+<input type="radio" id="submits_{{ loop.index0 }}" name="submits" value="{{ value }}">
+<label for="submits_{{ loop.index0 }}">{{ display }}</label>
+<br>
+{% else %}
+default text
+{% endfor %}"""
+    )
+
+
+def test_jinja_bullet_list() -> None:
+    assert (
+        htmlgen.jinja_bullet_list(
+            ("element",),
+            "elements",
+            "{{ element }}",
+        )
+        == """<ul>
+  {% for element in elements %}
+  <li>{{ element }}</li>
+  {% endfor %}
+</ul>"""
+    )
