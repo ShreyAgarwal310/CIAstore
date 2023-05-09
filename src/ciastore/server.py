@@ -18,8 +18,15 @@ import time
 import uuid
 from os import getenv, makedirs, path
 from pathlib import Path
-from typing import (Any, AsyncIterator, Awaitable, Callable, Final, TypeVar,
-                    cast)
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Final,
+    TypeVar,
+    cast,
+)
 from urllib.parse import urlencode
 
 import trio
@@ -28,8 +35,15 @@ from hypercorn.config import Config
 from hypercorn.trio import serve
 from quart import Response, request
 from quart.templating import stream_template
-from quart_auth import (AuthManager, AuthUser, Unauthorized, current_user,
-                        login_required, login_user, logout_user)
+from quart_auth import (
+    AuthManager,
+    AuthUser,
+    Unauthorized,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
 from quart_trio import QuartTrio
 from werkzeug import Response as wkresp
 from werkzeug.exceptions import HTTPException
