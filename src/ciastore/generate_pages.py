@@ -373,7 +373,7 @@ def generate_login_get() -> str:
             htmlgen.contain_in_box(form),
             htmlgen.wrap_tag(
                 "i",
-                "Ask a staff member if you need to create an account",
+                "Ask an administrator if you need to create an account",
             ),
         )
     )
