@@ -50,6 +50,13 @@ tests = [
     "pytest-trio~=0.8.0",
 ]
 
+[project.urls]
+"Homepage" = "https://github.com/ShreyAgarwal310/CIAstore"
+"Source" = "https://github.com/ShreyAgarwal310/CIAstore"
+"Bug Tracker" = "https://github.com/ShreyAgarwal310/CIAstore/issues"
+
+[tool.setuptools.package-data]
+ciastore = ["py.typed", "templates/*", "static/*"]
 
 [tool.pytest.ini_options]
 addopts = "--cov-report term-missing --cov=ciastore"

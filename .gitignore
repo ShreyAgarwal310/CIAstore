@@ -5,8 +5,9 @@ jspm_packages/
 # Optional npm cache directory
 .npm
 
-# Server records
+# Server records and logs
 records/
+logs/
 
 # MacOS files
 **/.DS_Store
