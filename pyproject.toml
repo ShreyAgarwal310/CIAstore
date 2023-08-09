@@ -34,7 +34,6 @@ dev = [
     "pre-commit",
     "pre-commit-hooks~=4.4.0",  # must match .pre-commit-config.yaml
     "tox~=4.6.0",
-    "trio-typing[mypy]~=0.8.0",
 ]
 format = [
     "black~=23.7.0",            # must match .pre-commit-config.yaml
@@ -65,7 +64,6 @@ testpaths = [
 ]
 
 [tool.mypy]
-plugins = ["trio_typing.plugin"]
 mypy_path = "src"
 check_untyped_defs = true
 disallow_any_generics = true
