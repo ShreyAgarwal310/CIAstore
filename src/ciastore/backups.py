@@ -1,8 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# Backups - Preform periodic backups of all records
-
-"Preform periodic backups of all records"
+"""Backups - Preform periodic backups of all records."""
 
 # Programmed by CoolCat467
 
@@ -19,7 +15,7 @@ from ciastore import csvrecords, database
 
 
 async def backup_database() -> None:
-    """Backup records from database module"""
+    """Backup records from database module."""
     for database_name in database.get_loaded():
         # Get folder and filename
         folder = path.dirname(database_name)
@@ -61,7 +57,7 @@ async def backup_database() -> None:
 
 
 async def backup_csv() -> None:
-    """Backup records from csvrecords module"""
+    """Backup records from csvrecords module."""
     async with trio.open_nursery() as nursery:
         for csvrecord_name in csvrecords.get_loaded():
             # Get folder and filename
@@ -104,7 +100,7 @@ async def backup_csv() -> None:
 
 
 async def backup() -> None:
-    """Backup all records"""
+    """Backup all records."""
     logging.info("Preforming backup")
     await backup_database()
     await backup_csv()
@@ -112,7 +108,7 @@ async def backup() -> None:
 
 
 async def periodic_backups() -> None:
-    """Trigger periodic backups"""
+    """Trigger periodic backups."""
     while True:
         # Do backup every 6 hours
         await trio.sleep(60 * 60 * 6)

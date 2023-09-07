@@ -1,4 +1,4 @@
-"Generate pages for the caught in the act store"
+"""Generate pages for the caught in the act store."""
 
 # Programmed by CoolCat467
 
@@ -7,7 +7,8 @@ __author__ = "CoolCat467"
 
 
 import pathlib
-from typing import Callable, Final
+from collections.abc import Callable
+from typing import Final
 
 from ciastore import htmlgen, server
 
@@ -18,7 +19,7 @@ STATIC_FUNCTIONS: dict[str, Callable[[], str]] = {}
 
 
 def save_template(name: str, content: str) -> None:
-    """Save content as new template "{name}" """
+    """Save content as new template "{name}"."""
     assert TEMPLATE_FOLDER is not None
     template_path = TEMPLATE_FOLDER / f"{name}.html.jinja"
     with open(template_path, "w", encoding="utf-8") as template_file:
@@ -28,7 +29,7 @@ def save_template(name: str, content: str) -> None:
 
 
 def save_static(filename: str, content: str) -> None:
-    """Save content as new static file "{filename}" """
+    """Save content as new static file "{filename}"."""
     assert STATIC_FOLDER is not None
     static_path = STATIC_FOLDER / filename
     with open(static_path, "w", encoding="utf-8") as static_file:
@@ -40,12 +41,12 @@ def save_static(filename: str, content: str) -> None:
 def save_template_as(
     filename: str,
 ) -> Callable[[Callable[[], str]], Callable[[], str]]:
-    """Save generated template as filename"""
+    """Save generated template as filename."""
 
     def function_wrapper(function: Callable[[], str]) -> Callable[[], str]:
         if filename in TEMPLATE_FUNCTIONS:
             raise NameError(
-                f"{filename!r} already exists as template filename"
+                f"{filename!r} already exists as template filename",
             )
         TEMPLATE_FUNCTIONS[filename] = function
         return function
@@ -56,7 +57,7 @@ def save_template_as(
 def save_static_as(
     filename: str,
 ) -> Callable[[Callable[[], str]], Callable[[], str]]:
-    """Save generated static file as filename"""
+    """Save generated static file as filename."""
 
     def function_wrapper(function: Callable[[], str]) -> Callable[[], str]:
         if filename in STATIC_FUNCTIONS:
@@ -69,7 +70,7 @@ def save_static_as(
 
 @save_static_as("style.css")
 def generate_style_css() -> str:
-    """Generate style.css static file"""
+    """Generate style.css static file."""
     mono = "SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace"
     return "\n".join(
         (
@@ -190,7 +191,7 @@ def generate_style_css() -> str:
                     padding_bottom="5%",
                 ),
             ),
-        )
+        ),
     )
 
 
@@ -202,14 +203,17 @@ def template(
     body_tag: dict[str, htmlgen.TagArg] | None = None,
     lang: str = "en",
 ) -> str:
-    """HTML Template for application"""
+    """HTML Template for application."""
     head_data = "\n".join(
         (
             htmlgen.tag(
-                "link", rel="stylesheet", type_="text/css", href="/style.css"
+                "link",
+                rel="stylesheet",
+                type_="text/css",
+                href="/style.css",
             ),
             head,
-        )
+        ),
     )
 
     join_body = (
@@ -242,20 +246,24 @@ def template(
                             "p",
                             footer,
                         ),
-                    )
+                    ),
                 ),
             ),
-        )
+        ),
     )
 
     return htmlgen.template(
-        title, body_data, head=head_data, body_tag=body_tag, lang=lang
+        title,
+        body_data,
+        head=head_data,
+        body_tag=body_tag,
+        lang=lang,
     )
 
 
 @save_template_as("error_page")
 def generate_error_page() -> str:
-    """Generate error response page"""
+    """Generate error response page."""
     error_text = htmlgen.wrap_tag("p", htmlgen.jinja_expression("error_body"))
     content = "\n".join(
         (
@@ -270,12 +278,12 @@ def generate_error_page() -> str:
                                 "Return to previous page",
                             ),
                             htmlgen.tag("br"),
-                        )
-                    )
-                }
+                        ),
+                    ),
+                },
             ),
             htmlgen.create_link("/", "Return to main page"),
-        )
+        ),
     )
     body = htmlgen.contain_in_box(content)
     return template(
@@ -286,7 +294,7 @@ def generate_error_page() -> str:
 
 @save_template_as("signup_get")
 def generate_signup_get() -> str:
-    """Generate /signup get page"""
+    """Generate /signup get page."""
     contents = "<br>\n".join(
         (
             htmlgen.input_field(
@@ -308,7 +316,7 @@ def generate_signup_get() -> str:
                     "required": "",
                 },
             ),
-        )
+        ),
     )
 
     form = htmlgen.form("signup", contents, "Sign up")
@@ -323,16 +331,16 @@ def generate_signup_get() -> str:
             htmlgen.link_list(
                 {
                     "/login": "Already have an account?",
-                }
+                },
             ),
-        )
+        ),
     )
     return template("Sign up", body)
 
 
 @save_template_as("signup_post")
 def generate_signup_post() -> str:
-    """Generate /signup post page"""
+    """Generate /signup post page."""
     text = (
         "Sent an email to {{ email }} containing "
         + "your a link to verify your account."
@@ -343,7 +351,7 @@ def generate_signup_post() -> str:
 
 @save_template_as("login_get")
 def generate_login_get() -> str:
-    """Generate /login get page"""
+    """Generate /login get page."""
     contents = "<br>\n".join(
         (
             htmlgen.input_field(
@@ -364,7 +372,7 @@ def generate_login_get() -> str:
                     "required": "",
                 },
             ),
-        )
+        ),
     )
 
     form = htmlgen.form("login", contents, "Sign In")
@@ -375,14 +383,14 @@ def generate_login_get() -> str:
                 "i",
                 "Ask an administrator if you need to create an account",
             ),
-        )
+        ),
     )
     return template("Login", body)
 
 
 @save_template_as("add_tickets_get")
 def generate_add_tickets_get() -> str:
-    """Generate /add-tickets get page"""
+    """Generate /add-tickets get page."""
     contents = "<br>\n".join(
         (
             htmlgen.input_field(
@@ -408,7 +416,7 @@ def generate_add_tickets_get() -> str:
                     "max": 10,
                 },
             ),
-        )
+        ),
     )
     form = htmlgen.form("add-tickets", contents, "Submit")
     body = htmlgen.contain_in_box(form)
@@ -417,7 +425,7 @@ def generate_add_tickets_get() -> str:
 
 @save_template_as("add_tickets_post")
 def generate_add_tickets_post() -> str:
-    """Generate /add-tickets post page"""
+    """Generate /add-tickets post page."""
     body = "\n".join(
         (
             htmlgen.contain_in_box(
@@ -426,7 +434,7 @@ def generate_add_tickets_post() -> str:
                     "Added {{ ticket_count }} ticket{{ plural }} "
                     + "for {{ student_id }}",
                     block=False,
-                )
+                ),
             ),
             htmlgen.tag("br"),
             htmlgen.tag("br"),
@@ -436,16 +444,16 @@ def generate_add_tickets_post() -> str:
                     "/": "Return to main page",
                     "/tickets": "Display tickets for user",
                     "/logout": "Log Out",
-                }
+                },
             ),
-        )
+        ),
     )
     return template("Added Tickets", body)
 
 
 @save_template_as("subtract_tickets_get")
 def generate_subtract_tickets_get() -> str:
-    """Generate /subtract-tickets get page"""
+    """Generate /subtract-tickets get page."""
     contents = "<br>\n".join(
         (
             htmlgen.input_field(
@@ -471,7 +479,7 @@ def generate_subtract_tickets_get() -> str:
                     "max": 100,
                 },
             ),
-        )
+        ),
     )
     form = htmlgen.form("add-tickets", contents, "Submit")
     body = htmlgen.contain_in_box(form)
@@ -480,7 +488,7 @@ def generate_subtract_tickets_get() -> str:
 
 @save_template_as("subtract_tickets_post")
 def generate_subtract_tickets_post() -> str:
-    """Generate /subtract-tickets post page"""
+    """Generate /subtract-tickets post page."""
     body = "\n".join(
         (
             htmlgen.contain_in_box(
@@ -490,7 +498,7 @@ def generate_subtract_tickets_post() -> str:
                     "from {{ student_id }}. They now have {{ tickets_left }} "
                     "ticket{{ plural_left }}.",
                     block=False,
-                )
+                ),
             ),
             htmlgen.tag("br"),
             htmlgen.tag("br"),
@@ -500,16 +508,16 @@ def generate_subtract_tickets_post() -> str:
                     "/": "Return to main page",
                     "/tickets": "Display tickets for user",
                     "/logout": "Log Out",
-                }
+                },
             ),
-        )
+        ),
     )
     return template("Subtracted Tickets", body)
 
 
 @save_template_as("settings_get")
 def generate_settings_get() -> str:
-    """Generate /settings get page"""
+    """Generate /settings get page."""
     links = {
         "/settings/change-password": "Change Password",
     }
@@ -523,16 +531,16 @@ def generate_settings_get() -> str:
                 {
                     "/": "Return to main page",
                     "/logout": "Log Out",
-                }
+                },
             ),
-        )
+        ),
     )
     return template("User Settings", body)
 
 
 @save_template_as("settings_change_password_get")
 def generate_settings_change_password_get() -> str:
-    """Generate /settings/change-password get page"""
+    """Generate /settings/change-password get page."""
     contents = "<br>\n".join(
         (
             htmlgen.input_field(
@@ -554,7 +562,7 @@ def generate_settings_change_password_get() -> str:
                     "required": "",
                 },
             ),
-        )
+        ),
     )
     form = htmlgen.form(
         "change_password",
@@ -572,22 +580,24 @@ def generate_settings_change_password_get() -> str:
                     "/": "Return to main page",
                     "/logout": "Log Out",
                     "/settings": "All Account Settings",
-                }
+                },
             ),
-        )
+        ),
     )
     return template("Change Password", body)
 
 
 @save_template_as("settings_change_password_post")
 def generate_settings_change_password_post() -> str:
-    """Generate /settings/change-password post page"""
+    """Generate /settings/change-password post page."""
     body = "\n".join(
         (
             htmlgen.contain_in_box(
                 htmlgen.wrap_tag(
-                    "p", "Password changed successfully", block=False
-                )
+                    "p",
+                    "Password changed successfully",
+                    block=False,
+                ),
             ),
             htmlgen.tag("br"),
             htmlgen.tag("br"),
@@ -597,16 +607,16 @@ def generate_settings_change_password_post() -> str:
                     "/": "Return to main page",
                     "/logout": "Log Out",
                     "/settings": "All Account Settings",
-                }
+                },
             ),
-        )
+        ),
     )
     return template("Password Changed", body)
 
 
 @save_template_as("invite_teacher_get")
 def generate_invite_teacher_get() -> str:
-    """Generate /invite-teacher get page"""
+    """Generate /invite-teacher get page."""
     contents = htmlgen.input_field(
         "new_account_username",
         "New Account Username (3-16 lowercase characters)",
@@ -635,16 +645,16 @@ def generate_invite_teacher_get() -> str:
                     "/logout": "Log Out",
                     "/settings": "Account Settings",
                     "/add-tickets": "Add Tickets for Student",
-                }
+                },
             ),
-        )
+        ),
     )
     return template("Invite A Teacher", body)
 
 
 @save_template_as("invite_teacher_post")
 def generate_invite_teacher_post() -> str:
-    """Generate /invite-teacher post page"""
+    """Generate /invite-teacher post page."""
     body = "\n".join(
         (
             htmlgen.wrap_tag(
@@ -657,17 +667,21 @@ def generate_invite_teacher_post() -> str:
                     (
                         "Username: ",
                         htmlgen.wrap_tag(
-                            "code", "{{ new_account_username }}", block=False
+                            "code",
+                            "{{ new_account_username }}",
+                            block=False,
                         ),
                         "\n",
                         htmlgen.tag("br"),
                         "\n",
                         "Password: ",
                         htmlgen.wrap_tag(
-                            "code", "{{ password }}", block=False
+                            "code",
+                            "{{ password }}",
+                            block=False,
                         ),
-                    )
-                )
+                    ),
+                ),
             ),
             htmlgen.tag("br"),
             htmlgen.wrap_tag(
@@ -692,9 +706,9 @@ def generate_invite_teacher_post() -> str:
                     "/settings": "Account Settings",
                     "/add-tickets": "Add Tickets for Student",
                     "/invite-teacher": "Invite Another Teacher",
-                }
+                },
             ),
-        )
+        ),
     )
 
     return template("Created New Account!", body)
@@ -702,7 +716,7 @@ def generate_invite_teacher_post() -> str:
 
 @save_template_as("invite_manager_get")
 def generate_invite_manager_get() -> str:
-    """Generate /invite-manager get page"""
+    """Generate /invite-manager get page."""
     contents = htmlgen.input_field(
         "new_account_username",
         "New Account Username (3-16 lowercase characters)",
@@ -731,16 +745,16 @@ def generate_invite_manager_get() -> str:
                     "/logout": "Log Out",
                     "/settings": "Account Settings",
                     "/add-tickets": "Add Tickets for Student",
-                }
+                },
             ),
-        )
+        ),
     )
     return template("Invite A Manager", body)
 
 
 @save_template_as("invite_manager_post")
 def generate_invite_manager_post() -> str:
-    """Generate /invite-manager post page"""
+    """Generate /invite-manager post page."""
     body = "\n".join(
         (
             htmlgen.wrap_tag(
@@ -766,8 +780,8 @@ def generate_invite_manager_post() -> str:
                             htmlgen.jinja_expression("password"),
                             block=False,
                         ),
-                    )
-                )
+                    ),
+                ),
             ),
             htmlgen.tag("br"),
             htmlgen.wrap_tag(
@@ -793,9 +807,9 @@ def generate_invite_manager_post() -> str:
                     "/add-tickets": "Add Tickets for Student",
                     "/invite-teacher": "Invite a Teacher",
                     "/invite-manager": "Invite Another Manager",
-                }
+                },
             ),
-        )
+        ),
     )
 
     return template("Created New Account!", body)
@@ -803,7 +817,7 @@ def generate_invite_manager_post() -> str:
 
 @save_template_as("ticket_form")
 def generate_ticket_form() -> str:
-    """Generate tickets get ticket form page"""
+    """Generate tickets get ticket form page."""
     contents = "<br>\n".join(
         (
             htmlgen.input_field(
@@ -817,7 +831,7 @@ def generate_ticket_form() -> str:
                     "pattern": "[0-9]{6}",  # If ever more than 6 change here
                 },
             ),
-        )
+        ),
     )
 
     form = htmlgen.form(
@@ -833,30 +847,30 @@ def generate_ticket_form() -> str:
             htmlgen.link_list(
                 {
                     "/": "Return to main page",
-                }
+                },
             ),
-        )
+        ),
     )
     return template("Enter ID", body)
 
 
 @save_template_as("ticket_count_page")
 def generate_ticket_count_page() -> str:
-    """Generate tickets get ticket count page"""
+    """Generate tickets get ticket count page."""
     teacher_case = {
         'user_type in ("teacher", "manager", "admin")': htmlgen.link_list(
             {
                 "/add-tickets": "Add Tickets for Student",
-            }
-        )
+            },
+        ),
     }
 
     manager_case = {
         'user_type in ("manager", "admin")': htmlgen.link_list(
             {
                 "/subtract-tickets": "Subtract Tickets for Student",
-            }
-        )
+            },
+        ),
     }
 
     body = "\n".join(
@@ -866,7 +880,7 @@ def generate_ticket_count_page() -> str:
                     "h3",
                     "{{ username }} currently has {{ count }} tickets",
                     block=False,
-                )
+                ),
             ),
             htmlgen.create_link("{{ user_link }}", "Link to this user"),
             htmlgen.wrap_tag("p", "Links:", block=False),
@@ -874,34 +888,34 @@ def generate_ticket_count_page() -> str:
                 {
                     "/tickets": "Display tickets for user",
                     "/": "Return to main page",
-                }
+                },
             ),
             htmlgen.jinja_if_block(teacher_case),
             htmlgen.jinja_if_block(manager_case),
-        )
+        ),
     )
     return template("Ticket Count", body)
 
 
 @save_template_as("root_get")
 def generate_root_get() -> str:
-    """Generate / (root) get page"""
+    """Generate / (root) get page."""
     login_link = htmlgen.create_link("/login", "this link")
 
     teacher_case = {
         'user_type in ("teacher", "manager", "admin")': htmlgen.link_list(
             {
                 "/add-tickets": "Add Tickets for Student",
-            }
-        )
+            },
+        ),
     }
 
     manager_case = {
         'user_type in ("manager", "admin")': htmlgen.link_list(
             {
                 "/subtract-tickets": "Subtract Tickets for Student",
-            }
-        )
+            },
+        ),
     }
 
     admin_case = {
@@ -909,8 +923,8 @@ def generate_root_get() -> str:
             {
                 "/invite-teacher": "Invite Teacher",
                 "/invite-manager": "Invite Manager",
-            }
-        )
+            },
+        ),
     }
 
     body = "\n".join(
@@ -919,13 +933,15 @@ def generate_root_get() -> str:
                 htmlgen.jinja_if_block(
                     {
                         'user_name == ""': htmlgen.wrap_tag(
-                            "p", f"Please log in at {login_link}."
+                            "p",
+                            f"Please log in at {login_link}.",
                         ),
                         "": htmlgen.wrap_tag(
-                            "p", "Hello logged in user {{ user_name }}."
+                            "p",
+                            "Hello logged in user {{ user_name }}.",
                         ),
-                    }
-                )
+                    },
+                ),
             ),
             htmlgen.wrap_tag("p", "Links:", block=False),
             htmlgen.jinja_if_block(
@@ -934,7 +950,7 @@ def generate_root_get() -> str:
                         {
                             "/login": "Log In",
                             # "/signup": "Sign Up",
-                        }
+                        },
                     ),
                     "": "\n".join(
                         (
@@ -944,22 +960,22 @@ def generate_root_get() -> str:
                                     "/logout": "Log Out",
                                     "/settings": "Account Settings",
                                     "/tickets": "View ticket count",
-                                }
+                                },
                             ),
                             htmlgen.jinja_if_block(teacher_case),
                             htmlgen.jinja_if_block(manager_case),
                             htmlgen.jinja_if_block(admin_case),
-                        )
+                        ),
                     ),
-                }
+                },
             ),
-        )
+        ),
     )
     return template("Caught In the Act", body)
 
 
 def run() -> None:
-    "Generate all page templates and static files"
+    """Generate all page templates and static files."""
     for filename, function in TEMPLATE_FUNCTIONS.items():
         save_template(filename, function())
     for filename, function in STATIC_FUNCTIONS.items():

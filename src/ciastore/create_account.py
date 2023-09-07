@@ -1,4 +1,4 @@
-"""Create an account in an empty database"""
+"""Create an account in an empty database."""
 
 # Programmed by CoolCat467
 
@@ -10,7 +10,7 @@ from ciastore import database, security, server
 
 
 def run() -> None:
-    "Run program"
+    """Prompt to create new admin account."""
     username = input("Username: ").lower().replace(" ", "")
     new_password = input("Password: ")
     users = database.load("records/users.json")
@@ -20,7 +20,8 @@ def run() -> None:
     server.create_uninitialized_account(username, "admin")
     users[username]["status"] = "created"
     users[username]["password"] = security.create_new_login_credentials(
-        new_password, server.PEPPER
+        new_password,
+        server.PEPPER,
     )
     users.write_file()
 

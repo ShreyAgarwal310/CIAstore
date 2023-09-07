@@ -1,4 +1,4 @@
-"""Database - Read and write json files"""
+"""Database - Read and write json files."""
 
 # Programmed by CoolCat467
 
@@ -15,11 +15,12 @@ _LOADED: dict[str, "Records"] = {}
 
 
 class Database(dict[str, Any]):
-    """Database dict with file read write functions"""
+    """Database dict with file read write functions."""
 
     __slots__ = ("file", "__weakref__")
 
     def __init__(self, file_path: str | Path) -> None:
+        """Initialize and set file path."""
         super().__init__()
         self.file = file_path
 
@@ -27,12 +28,12 @@ class Database(dict[str, Any]):
             self.reload_file()
 
     def reload_file(self) -> None:
-        """Reload database file"""
+        """Reload database file."""
         with open(self.file, "rb") as file:
             self.update(json.load(file))
 
     def write_file(self) -> None:
-        """Write database file"""
+        """Write database file."""
         folder = path.dirname(self.file)
         if not path.exists(folder):
             makedirs(folder, exist_ok=True)
@@ -41,18 +42,20 @@ class Database(dict[str, Any]):
 
 
 class Table:
-    """Table from dictonary
+    """Table from dictonary.
 
-    Allows getting and setting entire columns of a database"""
+    Allows getting and setting entire columns of a database
+    """
 
     __slots__ = ("_records", "_key_name")
 
     def __init__(self, records: dict[str, Any], key_name: str) -> None:
+        """Initialize and set records and key name."""
         self._records = records
         self._key_name = key_name
 
     def __repr__(self) -> str:
-        """Get text representation of table"""
+        """Get text representation of table."""
         size: dict[str, int] = {}
         columns = self.keys()
         for column in columns:
@@ -67,7 +70,7 @@ class Table:
                 size[column] = max(size[column], length)
         num_pad = len(str(len(self)))
         lines = []
-        column_names = " ".join(c.ljust(l) for c, l in size.items())
+        column_names = " ".join(c.ljust(length) for c, length in size.items())
         lines.append("".rjust(num_pad) + " " + column_names)
         for index in range(len(self)):
             line = [str(index).ljust(num_pad)]
@@ -77,72 +80,77 @@ class Table:
         return "\n".join(lines)
 
     def __getitem__(self, column: str) -> tuple[Any, ...]:
+        """Get column data."""
         if column not in self.keys():
-            return tuple((None for _ in range(len(self))))
+            return tuple(None for _ in range(len(self)))
         if column == self._key_name:
             return tuple(self._records.keys())
         return tuple([row.get(column) for row in self._records.values()])
 
     def __setitem__(self, column: str, value: Iterable[Any]) -> None:
+        """Set column data to value."""
         if column == self._key_name:
             raise ValueError("column is key type")
-        for key, set_value in zip(self._records, value):
+        for key, set_value in zip(self._records, value, strict=True):
             if set_value is None:
                 continue
             self._records[key][column] = set_value
 
     def keys(self) -> set[str]:
-        """Return the name of every column"""
+        """Return the name of every column."""
         keys = {self._key_name}
         for row in self._records.values():
             keys |= set(row.keys())
         return keys
 
     def __iter__(self) -> Iterator[str]:
+        """Return iterator for column names."""
         return iter(self.keys())
 
     def values(self) -> tuple[Any, ...]:
-        """Return every column"""
+        """Return every column."""
         values = []
         for key in self.keys():
             values.append(self[key])
         return tuple(values)
 
     def items(self) -> tuple[tuple[str, Any], ...]:
+        """Return tuples of column names and columns."""
         items = []
         for key in self.keys():
             items.append((key, self[key]))
         return tuple(items)
 
     def column_and_rows(self) -> Generator[tuple[str | Any, ...], None, None]:
-        """Yield tuple of column row and then rows in column order"""
+        """Yield tuple of column row and then rows in column order."""
         columns = tuple(self.keys() - {self._key_name})
-        yield (self._key_name,) + columns
+        yield (self._key_name, *columns)
         for key, value in self._records.items():
-            yield (key,) + tuple(value.get(col) for col in columns)
+            yield (key, *tuple(value.get(col) for col in columns))
 
     def rows(self) -> Generator[tuple[Any, ...], None, None]:
-        """Yield each row"""
+        """Yield each row."""
         gen = self.column_and_rows()
         _ = next(gen)
         yield from gen
 
     def __len__(self) -> int:
+        """Return number of records."""
         return len(self._records)
 
 
 class Records(Database):
-    """Records dict with columns"""
+    """Records dict with columns."""
 
     __slots__ = ()
 
     def table(self, element_name: str) -> Table:
-        """Get table object given that keys are named element name"""
+        """Get table object given that keys are named element name."""
         return Table(self, element_name)
 
 
 def load(file_path: str | Path) -> Records:
-    """Load database from file path or return already loaded instance"""
+    """Load database from file path or return already loaded instance."""
     file = path.abspath(file_path)
     if file not in _LOADED:
         _LOADED[file] = Records(file)
@@ -150,12 +158,12 @@ def load(file_path: str | Path) -> Records:
 
 
 def get_loaded() -> set[str]:
-    """Return set of loaded database files"""
+    """Return set of loaded database files."""
     return set(_LOADED)
 
 
 def unload(file_path: str | Path) -> None:
-    """If database loaded, write file and unload"""
+    """If database loaded, write file and unload."""
     file = path.abspath(file_path)
     if file not in get_loaded():
         return
@@ -165,6 +173,6 @@ def unload(file_path: str | Path) -> None:
 
 
 def unload_all() -> None:
-    """Unload all loaded databases"""
+    """Unload all loaded databases."""
     for file_path in get_loaded():
         unload(file_path)

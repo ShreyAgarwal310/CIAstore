@@ -1,15 +1,15 @@
-"""Get elapsed time"""
+"""Get elapsed time."""
 
 # Programmed by CoolCat467
 
 __title__ = "Elapsed"
 __author__ = "CoolCat467"
 
-from typing import Iterable
+from collections.abc import Iterable
 
 
 def split_time(seconds: int) -> list[int]:
-    """Split time into units of time"""
+    """Split time into units of time."""
     seconds = int(seconds)
 
     # values = (1, 60, 60, 24, 7, 365/12/7, 12, 10, 10, 10, 1000, 10, 10, 5)
@@ -51,7 +51,7 @@ def combine_end(data: Iterable[str], final: str = "and") -> str:
 
 
 def get_elapsed(seconds: int) -> str:
-    """Return elapsed time as a string"""
+    """Return elapsed time as a string."""
     times = (
         "eons",
         "eras",
@@ -90,7 +90,7 @@ def get_elapsed(seconds: int) -> str:
 
 
 def split_end(data: str, final: str = "and") -> list[str]:
-    """Split a combine_end joined string"""
+    """Split a combine_end joined string."""
     values = data.split(", ")
     values.extend(values.pop().split(final, 1))
     return [v.strip() for v in values if v]
@@ -101,16 +101,17 @@ def get_time_of_day(hour: int, season: int = 0) -> str:
 
     If season is -1, it is winter and afternoon is 12 PM to 4 PM
     If season is  0, season is unknown and afternoon is 12 PM to 6 PM
-    If season is  1, it is summer and afternoon is 12 PM to 8 PM"""
+    If season is  1, it is summer and afternoon is 12 PM to 8 PM
+    """
     season_offset = season << 1  # quick multiply by 2
 
     if hour > 4 and hour < 12:
         return "Morning"
-    elif hour > 11 and hour < (19 + season_offset):
+    if hour > 11 and hour < (19 + season_offset):
         # "Afternoon is usually from 12 PM to 6 PM,
         # but during winter it may be from 12 PM to 4 PM
         # and during summer it may be from 12 PM to 8 PM."
         return "Afternoon"
-    elif hour > (18 + season_offset) and hour < 22:
+    if hour > (18 + season_offset) and hour < 22:
         return "Evening"
     return "Night"

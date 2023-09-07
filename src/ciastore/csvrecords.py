@@ -1,4 +1,4 @@
-"""CSV Records - Read and write CSV files"""
+"""CSV Records - Read and write CSV files."""
 
 # Programmed by CoolCat467
 
@@ -19,13 +19,11 @@ _LOADED: dict[str, "CSVRecords"] = {}
 
 
 def _escape(raw_value: object) -> str:
-    """Escape CSV value
+    """Escape CSV value.
 
-    Escape CSV value as per RFC-4180"""
-    if isinstance(raw_value, str):
-        value = raw_value
-    else:
-        value = repr(raw_value)
+    Escape CSV value as per RFC-4180
+    """
+    value = raw_value if isinstance(raw_value, str) else repr(raw_value)
 
     need_quotes = False
     if '"' in value:
@@ -42,7 +40,7 @@ def _escape(raw_value: object) -> str:
 
 
 class CSVRecords(dict[str, dict[str, str | int]]):
-    """Records dict with CSV file read write functions"""
+    """Records dict with CSV file read write functions."""
 
     __slots__ = ("file", "key_name", "__weakref__", "_lock")
 
@@ -52,6 +50,7 @@ class CSVRecords(dict[str, dict[str, str | int]]):
         key_name: str,
         lock: trio.StrictFIFOLock,
     ) -> None:
+        """Initialize file path, key name, file lock, and load file."""
         super().__init__()
         self.file = file_path
         self.key_name = key_name
@@ -61,14 +60,14 @@ class CSVRecords(dict[str, dict[str, str | int]]):
             self.reload_file()
 
     def reload_file(self) -> None:
-        """Reload database file"""
+        """Reload database file."""
         with open(self.file, encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, dialect="unix")
             self.key_name, *keys = next(reader)
             for row in reader:
                 entry: dict[str, str | int] = {}
                 entry_name, *values = row
-                for key, value in zip(keys, values):
+                for key, value in zip(keys, values, strict=True):
                     if value.isdecimal():
                         try:
                             entry[key] = int(value)
@@ -79,7 +78,7 @@ class CSVRecords(dict[str, dict[str, str | int]]):
                 self[entry_name] = entry
 
     def sync_write_file(self) -> None:
-        """Write database file synchronously (avoid if possible)"""
+        """Write database file synchronously (avoid if possible)."""
         folder = Path(path.dirname(self.file))
         if not folder.exists():
             makedirs(folder, exist_ok=True)
@@ -89,14 +88,16 @@ class CSVRecords(dict[str, dict[str, str | int]]):
             writer.writerows(table.column_and_rows())
 
     async def async_write_file(self) -> None:
-        """Write database file asynchronously"""
+        """Write database file asynchronously."""
         folder = trio.Path(path.dirname(self.file))
         if not await folder.exists():
             makedirs(folder, exist_ok=True)
         async with self._lock:
             table = Table(self, self.key_name)
             async with await trio.open_file(
-                self.file, "w", encoding="utf-8"
+                self.file,
+                "w",
+                encoding="utf-8",
             ) as file:
                 for row in table.column_and_rows():
                     for idx, value in enumerate(row):
@@ -107,11 +108,13 @@ class CSVRecords(dict[str, dict[str, str | int]]):
 
 
 def load(
-    file_path: str | Path | trio.Path, key_name: str | None = None
+    file_path: str | Path | trio.Path,
+    key_name: str | None = None,
 ) -> CSVRecords:
-    """Load database from file path or return already loaded instance
+    """Load database from file path or return already loaded instance.
 
-    If key name is none, read key name from the file"""
+    If key name is none, read key name from the file
+    """
     file = path.abspath(file_path)
     if file not in _LOADED:
         if key_name is None:
@@ -122,12 +125,12 @@ def load(
 
 
 def get_loaded() -> set[str]:
-    """Return set of loaded database files"""
+    """Return set of loaded database files."""
     return set(_LOADED)
 
 
 async def unload(file_path: str | Path | trio.Path) -> None:
-    """If database loaded, write file and unload"""
+    """If database loaded, write file and unload."""
     file = path.abspath(file_path)
     if file not in get_loaded():
         return
@@ -138,11 +141,13 @@ async def unload(file_path: str | Path | trio.Path) -> None:
 
 
 async def unload_all() -> None:
-    """Unload all loaded databases"""
+    """Unload all loaded databases."""
     async with trio.open_nursery() as nursery:
         for file_path in get_loaded():
             nursery.start_soon(
-                unload, file_path, name=f"csv_unload_{file_path}"
+                unload,
+                file_path,
+                name=f"csv_unload_{file_path}",
             )
 
 

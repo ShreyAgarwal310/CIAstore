@@ -1,8 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# Server - Caught In the Act Server
-
-"Caught In the Act Server"
+"""Server - Caught In the Act Server."""
 
 
 __title__ = "Caught In the Act Server"
@@ -16,12 +12,10 @@ import socket
 import sys
 import time
 import uuid
+from collections.abc import AsyncIterator, Callable, Coroutine
 from os import getenv, makedirs, path
 from typing import (
     Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
     Final,
     TypeVar,
     cast,
@@ -35,8 +29,8 @@ from hypercorn.trio import serve
 from quart import Response, request
 from quart.templating import stream_template
 from quart_auth import (
-    AuthManager,
     AuthUser,
+    QuartAuth,
     Unauthorized,
     current_user,
     login_required,
@@ -44,7 +38,7 @@ from quart_auth import (
     logout_user,
 )
 from quart_trio import QuartTrio
-from werkzeug import Response as wkresp
+from werkzeug import Response as WKResponse
 from werkzeug.exceptions import HTTPException
 
 from ciastore import backups, csvrecords, database, elapsed, security
@@ -68,7 +62,7 @@ logging.getLogger().addHandler(
         encoding="utf-8",
         utc=True,
         delay=True,
-    )
+    ),
 )
 
 load_dotenv()
@@ -84,7 +78,7 @@ PEPPER: Final = getenv("COOKIE_SECRET", "")
 
 
 def find_ip() -> str:
-    """Guess the IP where the server can be found from the network"""
+    """Guess the IP where the server can be found from the network."""
     # we get a UDP-socket for the TEST-networks reserved by IANA.
     # It is highly unlikely, that there is special routing used
     # for these networks, hence the socket later should give us
@@ -110,7 +104,7 @@ app: Final = QuartTrio(
     static_folder="static",
     template_folder="templates",
 )  # pylint: disable=invalid-name
-AuthManager(app)
+QuartAuth(app)
 
 
 # Attributes users might have and what they do:
@@ -130,7 +124,7 @@ AuthManager(app)
 
 
 def get_user_by(**kwargs: str) -> set[str]:
-    """Get set of usernames of given type"""
+    """Get set of usernames of given type."""
     users = database.load(app.root_path / "records" / "users.json")
     table = users.table("username")
     usernames: tuple[str, ...] = table["username"]
@@ -150,7 +144,8 @@ def get_user_by(**kwargs: str) -> set[str]:
 Handler = TypeVar(
     "Handler",
     bound=Callable[
-        ..., Awaitable[str | AsyncIterator[str] | wkresp | Response]
+        ...,
+        Coroutine[Any, Any, Coroutine[Any, Any, AsyncIterator[str]]],
     ],
 )
 
@@ -161,13 +156,12 @@ def login_require_only(
     """Require login and some attribute match."""
 
     def get_wrapper(function: Handler) -> Handler:
-        """Get handler wrapper"""
+        """Get handler wrapper."""
 
         @login_required
         @functools.wraps(function)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            """Make sure current user matches attributes"""
-
+            """Make sure current user matches attributes."""
             if current_user.auth_id is None:
                 raise Unauthorized()
 
@@ -185,7 +179,7 @@ def login_require_only(
             user = users[username]
             for raw_key, raw_value in attrs.items():
                 if isinstance(raw_value, str):
-                    value = set((raw_value,))
+                    value = {raw_value}
                 else:
                     value = raw_value
                 key = raw_key.removesuffix("_")
@@ -204,7 +198,7 @@ async def send_error(
     error_body: str,
     return_link: str | None = None,
 ) -> AsyncIterator[str]:
-    """Stream error page"""
+    """Stream error page."""
     return await stream_template(
         "error_page.html.jinja",
         page_title=page_title,
@@ -214,7 +208,7 @@ async def send_error(
 
 
 async def get_exception_page(code: int, name: str, desc: str) -> Response:
-    """Return Response for exception"""
+    """Return Response for exception."""
     resp_body = await send_error(
         page_title=f"{code} {name}",
         error_body=desc,
@@ -224,7 +218,7 @@ async def get_exception_page(code: int, name: str, desc: str) -> Response:
 
 
 def pretty_exception_name(exc: BaseException) -> str:
-    """Make exception into pretty text (split by spaces)"""
+    """Make exception into pretty text (split by spaces)."""
     exc_str = repr(exc).split("(", 1)[0]
     words = []
     last = 0
@@ -237,11 +231,11 @@ def pretty_exception_name(exc: BaseException) -> str:
         words.append(word)
         last = idx
     words.append(exc_str[last:])
-    return " ".join((w for w in words if w not in {"Error", "Exception"}))
+    return " ".join(w for w in words if w not in {"Error", "Exception"})
 
 
 def pretty_exception(function: Handler) -> Handler:
-    """Make exception pages pretty"""
+    """Make exception pages pretty."""
 
     @functools.wraps(function)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -276,11 +270,12 @@ def pretty_exception(function: Handler) -> Handler:
 
 
 def create_login_cookie_data(username: str) -> str:
-    """Generate UUID accociated with a specific user
+    """Generate UUID accociated with a specific user.
 
     Only one instance of an account should be able
     to log in at any given time, subsequent will invalidate older
-    sessions. This will make remembering instances easier"""
+    sessions. This will make remembering instances easier
+    """
     # Get login database
     logins = database.load(app.root_path / "records" / "login.json")
 
@@ -301,9 +296,10 @@ def create_login_cookie_data(username: str) -> str:
 
 
 def get_login_from_cookie_data(code: str) -> str | None:
-    """Get username from cookie data
+    """Get username from cookie data.
 
-    If cookie data is invalid return None"""
+    If cookie data is invalid return None
+    """
     # Get login database
     logins = database.load(app.root_path / "records" / "login.json")
 
@@ -324,7 +320,8 @@ def get_login_from_cookie_data(code: str) -> str | None:
 
 
 def create_uninitialized_account(
-    username: str, type_: str | None = None
+    username: str,
+    type_: str | None = None,
 ) -> None:
     """Create uninitialized account. If type is None do not set."""
     users = database.load(app.root_path / "records" / "users.json")
@@ -347,7 +344,8 @@ async def add_tickets_to_user(username: str, count: int) -> None:
     assert count > 0, f"Use subtract_user_tickets instead of adding {count}"
 
     records = csvrecords.load(
-        app.root_path / "records" / "tickets.csv", "student_id"
+        app.root_path / "records" / "tickets.csv",
+        "student_id",
     )
 
     if username not in records:
@@ -362,11 +360,13 @@ async def add_tickets_to_user(username: str, count: int) -> None:
 
 
 def get_user_ticket_count(username: str) -> int:
-    """Get number of tickets user has at this time
+    """Get number of tickets user has at this time.
 
-    Raises LookupError if username does not exist"""
+    Raises LookupError if username does not exist
+    """
     records = csvrecords.load(
-        app.root_path / "records" / "tickets.csv", "student_id"
+        app.root_path / "records" / "tickets.csv",
+        "student_id",
     )
 
     if username not in records:
@@ -378,7 +378,7 @@ def get_user_ticket_count(username: str) -> int:
     assert isinstance(raw_count, str)
     if not raw_count.isdecimal():
         logging.error(
-            f"Count from tickets was {raw_count!r} instead of decimal"
+            f"Count from tickets was {raw_count!r} instead of decimal",
         )
         return 0
     return int(raw_count)
@@ -388,11 +388,13 @@ async def subtract_user_tickets(username: str, count: int) -> int:
     """Remove tickets from user. Return number of tickets left.
 
     Raises LookupError if username does not exist
-    Raises ValueError if count is greater than number of tickets in account"""
+    Raises ValueError if count is greater than number of tickets in account
+    """
     assert count > 0, f"Use add_user_tickets instead of subtracting {count}"
 
     records = csvrecords.load(
-        app.root_path / "records" / "tickets.csv", "student_id"
+        app.root_path / "records" / "tickets.csv",
+        "student_id",
     )
 
     if username not in records:
@@ -405,7 +407,7 @@ async def subtract_user_tickets(username: str, count: int) -> int:
 
     if new < 0:
         raise ValueError(
-            f"Insufficiant tickets for user {username!r} to subtract {count}"
+            f"Insufficiant tickets for user {username!r} to subtract {count}",
         )
     records[username]["tickets"] = new
     if new == 0:  # Maybe free up a bit of memory then, since default is zero
@@ -418,7 +420,7 @@ async def subtract_user_tickets(username: str, count: int) -> int:
 
 
 def convert_joining(code: str) -> bool:
-    """Convert joining record to student record"""
+    """Convert joining record to student record."""
     # Get usernames with matching join code and who are joining
     users = database.load(app.root_path / "records" / "users.json")
     usernames = get_user_by(join_code=code, status="joining")
@@ -452,7 +454,7 @@ def convert_joining(code: str) -> bool:
 
 
 # @app.get("/signup")
-# async def signup_get() -> str | wkresp:
+# async def signup_get() -> str | WKResponse:
 #    """Handle sign up get including code register"""
 #    # Get code from request arguments if it exists
 #    code = request.args.get("code", None)
@@ -471,7 +473,7 @@ def convert_joining(code: str) -> bool:
 
 
 # @app.post("/signup")
-# async def signup_post() -> wkresp | str:
+# async def signup_post() -> WKResponse | str:
 #    """Handle sign up form"""
 #    multi_dict = await request.form
 #    response = multi_dict.to_dict()
@@ -568,15 +570,15 @@ def convert_joining(code: str) -> bool:
 
 @app.get("/login")
 async def login_get() -> AsyncIterator[str]:
-    """Get login page"""
+    """Get login page."""
     return await stream_template(
         "login_get.html.jinja",
     )
 
 
 @app.post("/login")
-async def login_post() -> AsyncIterator[str] | wkresp:
-    """Handle login form"""
+async def login_post() -> AsyncIterator[str] | WKResponse:
+    """Handle login form."""
     multi_dict = await request.form
     response = multi_dict.to_dict()
 
@@ -586,7 +588,9 @@ async def login_post() -> AsyncIterator[str] | wkresp:
 
     if not username or not password:
         return await send_error(
-            "Login Error", "Username or password field not found", request.url
+            "Login Error",
+            "Username or password field not found",
+            request.url,
         )
 
     # Check Credentials here, e.g. username & password.
@@ -594,7 +598,9 @@ async def login_post() -> AsyncIterator[str] | wkresp:
 
     if username not in users:
         return await send_error(
-            "Login Error", "Username or password is invalid.", request.url
+            "Login Error",
+            "Username or password is invalid.",
+            request.url,
         )
 
     if users[username].get("type", "student") == "student":
@@ -614,7 +620,9 @@ async def login_post() -> AsyncIterator[str] | wkresp:
     if not await security.compare_hash(password, database_value, PEPPER):
         # Bad password
         return await send_error(
-            "Login Error", "Username or password is invalid.", request.url
+            "Login Error",
+            "Username or password is invalid.",
+            request.url,
         )
 
     # Make sure to change status of auto password accounts
@@ -630,8 +638,8 @@ async def login_post() -> AsyncIterator[str] | wkresp:
 
 
 @app.get("/logout")
-async def logout() -> wkresp:
-    """Handle logout"""
+async def logout() -> WKResponse:
+    """Handle logout."""
     if await current_user.is_authenticated:
         code = current_user.auth_id
         assert code is not None
@@ -646,7 +654,7 @@ async def logout() -> wkresp:
 
 # @app.get("/user_data")
 # @login_required
-# async def user_data_route() -> wkresp | Response:
+# async def user_data_route() -> WKResponse | Response:
 #    """Dump user data
 #
 #    Warning, potential security issue, do not run in production"""
@@ -673,7 +681,7 @@ async def logout() -> wkresp:
 @pretty_exception
 @login_require_only(type_={"teacher", "manager", "admin"})
 async def add_tickets_get() -> AsyncIterator[str]:
-    """Add tickets page for teachers"""
+    """Add tickets page for teachers."""
     return await stream_template(
         "add_tickets_get.html.jinja",
     )
@@ -683,7 +691,7 @@ async def add_tickets_get() -> AsyncIterator[str]:
 @pretty_exception
 @login_require_only(type_={"teacher", "manager", "admin"})
 async def add_tickets_post() -> AsyncIterator[str]:
-    """Handle post for add tickets form"""
+    """Handle post for add tickets form."""
     multi_dict = await request.form
     response = multi_dict.to_dict()
 
@@ -698,7 +706,9 @@ async def add_tickets_post() -> AsyncIterator[str]:
             raise ValueError
     except ValueError:
         return await send_error(
-            "Ticket Count Error", "Ticket count is not in range.", request.url
+            "Ticket Count Error",
+            "Ticket count is not in range.",
+            request.url,
         )
 
     await add_tickets_to_user(student_id, ticket_count)
@@ -716,7 +726,7 @@ async def add_tickets_post() -> AsyncIterator[str]:
 @pretty_exception
 @login_require_only(type_={"manager", "admin"})
 async def subtract_tickets_get() -> AsyncIterator[str]:
-    """Subtract tickets page for managers"""
+    """Subtract tickets page for managers."""
     return await stream_template(
         "subtract_tickets_get.html.jinja",
     )
@@ -726,7 +736,7 @@ async def subtract_tickets_get() -> AsyncIterator[str]:
 @pretty_exception
 @login_require_only(type_={"manager", "admin"})
 async def subtract_tickets_post() -> AsyncIterator[str]:
-    """Handle post for subtract tickets form"""
+    """Handle post for subtract tickets form."""
     multi_dict = await request.form
     response = multi_dict.to_dict()
 
@@ -741,7 +751,9 @@ async def subtract_tickets_post() -> AsyncIterator[str]:
             raise ValueError
     except ValueError:
         return await send_error(
-            "Ticket Count Error", "Ticket count is not in range.", request.url
+            "Ticket Count Error",
+            "Ticket count is not in range.",
+            request.url,
         )
 
     try:
@@ -778,7 +790,7 @@ async def subtract_tickets_post() -> AsyncIterator[str]:
 @pretty_exception
 @login_required
 async def settings_get() -> AsyncIterator[str]:
-    """Settings page get request"""
+    """Settings page get request."""
     return await stream_template(
         "settings_get.html.jinja",
     )
@@ -788,7 +800,7 @@ async def settings_get() -> AsyncIterator[str]:
 @pretty_exception
 @login_required
 async def settings_change_password_get() -> AsyncIterator[str]:
-    """Setting page for password change get"""
+    """Setting page for password change get."""
     return await stream_template(
         "settings_change_password_get.html.jinja",
     )
@@ -797,8 +809,8 @@ async def settings_change_password_get() -> AsyncIterator[str]:
 @app.post("/settings/change-password")
 @pretty_exception
 @login_required
-async def settings_password_post() -> AsyncIterator[str] | wkresp:
-    """Handle password change form"""
+async def settings_password_post() -> AsyncIterator[str] | WKResponse:
+    """Handle password change form."""
     assert current_user.auth_id is not None
     users = database.load(app.root_path / "records" / "users.json")
     username = get_login_from_cookie_data(current_user.auth_id)
@@ -833,11 +845,13 @@ async def settings_password_post() -> AsyncIterator[str] | wkresp:
         return app.redirect("login")
 
     if not await security.compare_hash(
-        current_password, users[username]["password"], PEPPER
+        current_password,
+        users[username]["password"],
+        PEPPER,
     ):
         # Bad password
         logging.info(
-            f"{username!r} did not enter own password in " + "change password"
+            f"{username!r} did not enter own password in " + "change password",
         )
         return await send_error(
             "Password Does Not Match Error",
@@ -846,7 +860,8 @@ async def settings_password_post() -> AsyncIterator[str] | wkresp:
         )
 
     users[username]["password"] = security.create_new_login_credentials(
-        new_password, PEPPER
+        new_password,
+        PEPPER,
     )
     users.write_file()
     logging.info(f"{username!r} changed their password")
@@ -860,7 +875,7 @@ async def settings_password_post() -> AsyncIterator[str] | wkresp:
 @pretty_exception
 @login_require_only(type_="admin")
 async def invite_teacher_get() -> AsyncIterator[str]:
-    """Create new teacher account"""
+    """Create new teacher account."""
     return await stream_template(
         "invite_teacher_get.html.jinja",
     )
@@ -869,8 +884,8 @@ async def invite_teacher_get() -> AsyncIterator[str]:
 @app.post("/invite-teacher")
 @pretty_exception
 @login_require_only(type_="admin")
-async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
-    """Invite teacher form post handling"""
+async def invite_teacher_post() -> AsyncIterator[str] | WKResponse:
+    """Invite teacher form post handling."""
     assert current_user.auth_id is not None
     users = database.load(app.root_path / "records" / "users.json")
     creator_username = get_login_from_cookie_data(current_user.auth_id)
@@ -915,13 +930,15 @@ async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
 
     users = database.load(app.root_path / "records" / "users.json")
 
-    if new_account_username in users:
-        if users[new_account_username]["status"] != "created_auto_password":
-            return await send_error(
-                "Invite User Error",
-                "An account with the requested username already exists",
-                request.url,
-            )
+    if (
+        new_account_username in users
+        and users[new_account_username]["status"] != "created_auto_password"
+    ):
+        return await send_error(
+            "Invite User Error",
+            "An account with the requested username already exists",
+            request.url,
+        )
 
     password = security.create_new_password(16)
 
@@ -934,7 +951,7 @@ async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
     users.write_file()
 
     logging.info(
-        f"{creator_username!r} invited {new_account_username!r} as teacher"
+        f"{creator_username!r} invited {new_account_username!r} as teacher",
     )
 
     return await stream_template(
@@ -948,7 +965,7 @@ async def invite_teacher_post() -> AsyncIterator[str] | wkresp:
 @pretty_exception
 @login_require_only(type_="admin")
 async def invite_manager_get() -> AsyncIterator[str]:
-    """Create a new manager account"""
+    """Create a new manager account."""
     return await stream_template(
         "invite_manager_get.html.jinja",
     )
@@ -957,8 +974,8 @@ async def invite_manager_get() -> AsyncIterator[str]:
 @app.post("/invite-manager")
 @pretty_exception
 @login_require_only(type_="admin")
-async def invite_manager_post() -> AsyncIterator[str] | wkresp:
-    """Invite manager form post handling"""
+async def invite_manager_post() -> AsyncIterator[str] | WKResponse:
+    """Invite manager form post handling."""
     assert current_user.auth_id is not None
     users = database.load(app.root_path / "records" / "users.json")
     creator_username = get_login_from_cookie_data(current_user.auth_id)
@@ -1003,13 +1020,15 @@ async def invite_manager_post() -> AsyncIterator[str] | wkresp:
 
     users = database.load(app.root_path / "records" / "users.json")
 
-    if new_account_username in users:
-        if users[new_account_username]["status"] != "created_auto_password":
-            return await send_error(
-                "Invite User Error",
-                "An account with the requested username already exists",
-                request.url,
-            )
+    if (
+        new_account_username in users
+        and users[new_account_username]["status"] != "created_auto_password"
+    ):
+        return await send_error(
+            "Invite User Error",
+            "An account with the requested username already exists",
+            request.url,
+        )
 
     password = security.create_new_password(16)
 
@@ -1022,7 +1041,7 @@ async def invite_manager_post() -> AsyncIterator[str] | wkresp:
     users.write_file()
 
     logging.info(
-        f"{creator_username!r} invited {new_account_username!r} as manager"
+        f"{creator_username!r} invited {new_account_username!r} as manager",
     )
 
     return await stream_template(
@@ -1034,7 +1053,7 @@ async def invite_manager_post() -> AsyncIterator[str] | wkresp:
 
 @pretty_exception
 async def ticket_get_form() -> AsyncIterator[str]:
-    """Generate form for ticket GET when no ID given"""
+    """Generate form for ticket GET when no ID given."""
     return await stream_template(
         "ticket_form.html.jinja",
     )
@@ -1042,7 +1061,7 @@ async def ticket_get_form() -> AsyncIterator[str]:
 
 @pretty_exception
 async def ticket_count_page(username: str) -> AsyncIterator[str]:
-    """Ticket count page for given username"""
+    """Ticket count page for given username."""
     user_type = None
 
     if current_user.auth_id is not None:
@@ -1071,7 +1090,7 @@ async def ticket_count_page(username: str) -> AsyncIterator[str]:
 @app.get("/tickets")
 @pretty_exception
 async def tickets_get() -> AsyncIterator[str]:
-    """Tickets view page"""
+    """Tickets view page."""
     # Get username from request arguments if it exists
     username = request.args.get("id", None)
 
@@ -1092,7 +1111,7 @@ async def tickets_get() -> AsyncIterator[str]:
 @app.post("/tickets")
 @pretty_exception
 async def tickets_post() -> AsyncIterator[str]:
-    """Invite teacher form post handling"""
+    """Invite teacher form post handling."""
     multi_dict = await request.form
     response = multi_dict.to_dict()
 
@@ -1110,9 +1129,8 @@ async def tickets_post() -> AsyncIterator[str]:
 
 
 @app.get("/")
-async def root_get() -> AsyncIterator[str] | wkresp:
-    """Main page GET request"""
-
+async def root_get() -> AsyncIterator[str] | WKResponse:
+    """Main page GET request."""
     user_name = ""
     user_type = ""
     if await current_user.is_authenticated:
@@ -1142,7 +1160,7 @@ async def root_get() -> AsyncIterator[str] | wkresp:
 
 @app.before_serving
 async def startup() -> None:
-    """Schedule backups"""
+    """Schedule backups."""
     app.add_background_task(backups.periodic_backups)
 
 
@@ -1154,9 +1172,9 @@ async def run_async(
     cookie_secret: str | None = None,
     localhost: bool = False,
 ) -> None:
-    """Asynchronous Entry Point"""
+    """Asynchronous Entry Point."""
     if ip_addr is None:
-        ip_addr = "0.0.0.0"
+        ip_addr = "0.0.0.0"  # noqa: S104  # Binding to all interfaces
         if not localhost:
             ip_addr = find_ip()
 
@@ -1192,7 +1210,7 @@ async def run_async(
         print(f"Serving on {proto}://{location}\n(CTRL + C to quit)")
 
         await serve(app, config_obj)
-    except socket.error:
+    except OSError:
         logging.error(f"Cannot bind to IP address '{ip_addr}' port {port}")
         sys.exit(1)
     except KeyboardInterrupt:
@@ -1200,7 +1218,7 @@ async def run_async(
 
 
 def run() -> None:
-    """Synchronous Entry Point"""
+    """Synchronous Entry Point."""
     root_dir = path.dirname(__file__)
     port = 6002
 
@@ -1210,11 +1228,11 @@ def run() -> None:
         print(
             """\nNo cookie secret set!
 Either add ".env" file in server folder with COOKIE_SECRET=<token here> line,
-or set COOKIE_SECRET environment variable."""
+or set COOKIE_SECRET environment variable.""",
         )
         return
 
-    hostname: Final = getenv("hostname", "None")
+    hostname: Final = getenv("HOSTNAME", "None")
 
     ip_address = None
     if hostname != "None":
@@ -1236,7 +1254,7 @@ or set COOKIE_SECRET environment variable."""
 
 
 def main() -> None:
-    """Call run after setup"""
+    """Call run after setup."""
     print(f"{__title__}\nProgrammed by {__author__}.\n")
     try:
         logging.captureWarnings(True)
