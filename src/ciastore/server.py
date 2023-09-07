@@ -12,7 +12,7 @@ import socket
 import sys
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator, Awaitable, Callable
 from os import getenv, makedirs, path
 from typing import (
     Any,
@@ -145,7 +145,7 @@ Handler = TypeVar(
     "Handler",
     bound=Callable[
         ...,
-        Coroutine[Any, Any, Coroutine[Any, Any, AsyncIterator[str]]],
+        Awaitable[AsyncIterator[str]],
     ],
 )
 
