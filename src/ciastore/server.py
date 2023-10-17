@@ -14,6 +14,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from os import getenv, makedirs, path
+from pathlib import Path
 from typing import (
     Any,
     Final,
@@ -125,7 +126,7 @@ QuartAuth(app)
 
 def get_user_by(**kwargs: str) -> set[str]:
     """Get set of usernames of given type."""
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
     table = users.table("username")
     usernames: tuple[str, ...] = table["username"]
 
@@ -165,7 +166,9 @@ def login_require_only(
             if current_user.auth_id is None:
                 raise Unauthorized()
 
-            users = database.load(app.root_path / "records" / "users.json")
+            users = database.load(
+                Path(app.root_path) / "records" / "users.json",
+            )
             username = get_login_from_cookie_data(current_user.auth_id)
 
             if username is None or username not in users:
@@ -277,7 +280,7 @@ def create_login_cookie_data(username: str) -> str:
     sessions. This will make remembering instances easier
     """
     # Get login database
-    logins = database.load(app.root_path / "records" / "login.json")
+    logins = database.load(Path(app.root_path) / "records" / "login.json")
 
     # Make new random code until it does not exist
     while (code := str(uuid.uuid4())) in logins:
@@ -301,7 +304,7 @@ def get_login_from_cookie_data(code: str) -> str | None:
     If cookie data is invalid return None
     """
     # Get login database
-    logins = database.load(app.root_path / "records" / "login.json")
+    logins = database.load(Path(app.root_path) / "records" / "login.json")
 
     # Attempt to get entry for code. Using get instead of
     # "in" search and then index means is faster
@@ -324,7 +327,7 @@ def create_uninitialized_account(
     type_: str | None = None,
 ) -> None:
     """Create uninitialized account. If type is None do not set."""
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
 
     if username in users:
         error = f"Attempted to create new account for {username} which exists"
@@ -344,7 +347,7 @@ async def add_tickets_to_user(username: str, count: int) -> None:
     assert count > 0, f"Use subtract_user_tickets instead of adding {count}"
 
     records = csvrecords.load(
-        app.root_path / "records" / "tickets.csv",
+        Path(app.root_path) / "records" / "tickets.csv",
         "student_id",
     )
 
@@ -365,7 +368,7 @@ def get_user_ticket_count(username: str) -> int:
     Raises LookupError if username does not exist
     """
     records = csvrecords.load(
-        app.root_path / "records" / "tickets.csv",
+        Path(app.root_path) / "records" / "tickets.csv",
         "student_id",
     )
 
@@ -393,7 +396,7 @@ async def subtract_user_tickets(username: str, count: int) -> int:
     assert count > 0, f"Use add_user_tickets instead of subtracting {count}"
 
     records = csvrecords.load(
-        app.root_path / "records" / "tickets.csv",
+        Path(app.root_path) / "records" / "tickets.csv",
         "student_id",
     )
 
@@ -422,7 +425,7 @@ async def subtract_user_tickets(username: str, count: int) -> int:
 def convert_joining(code: str) -> bool:
     """Convert joining record to student record."""
     # Get usernames with matching join code and who are joining
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
     usernames = get_user_by(join_code=code, status="joining")
     if len(usernames) != 1:
         logging.info(f"Invalid code {code!r}")
@@ -497,7 +500,7 @@ def convert_joining(code: str) -> bool:
 #            request.url
 #        )
 #
-#    users = database.load(app.root_path / "records" / "users.json")
+#    users = database.load(Path(app.root_path) / "records" / "users.json")
 #
 #    create_link = True
 #
@@ -594,7 +597,7 @@ async def login_post() -> AsyncIterator[str] | WKResponse:
         )
 
     # Check Credentials here, e.g. username & password.
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
 
     if username not in users:
         return await send_error(
@@ -633,6 +636,7 @@ async def login_post() -> AsyncIterator[str] | WKResponse:
     user = AuthUser(create_login_cookie_data(username))
     login_user(user)
     logging.info(f"User {username!r} logged in")
+    print(f"{current_user = }")
 
     return app.redirect("/")
 
@@ -659,7 +663,7 @@ async def logout() -> WKResponse:
 #
 #    Warning, potential security issue, do not run in production"""
 #    assert current_user.auth_id is not None
-#    users = database.load(app.root_path / "records" / "users.json")
+#    users = database.load(Path(app.root_path) / "records" / "users.json")
 #    username = get_login_from_cookie_data(current_user.auth_id)
 #
 #    if username is None or username not in users:
@@ -812,7 +816,7 @@ async def settings_change_password_get() -> AsyncIterator[str]:
 async def settings_password_post() -> AsyncIterator[str] | WKResponse:
     """Handle password change form."""
     assert current_user.auth_id is not None
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
     username = get_login_from_cookie_data(current_user.auth_id)
 
     if username is None or username not in users:
@@ -838,7 +842,7 @@ async def settings_password_post() -> AsyncIterator[str] | WKResponse:
         )
 
     # Check Credentials here, e.g. username & password.
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
 
     if username not in users:
         logout_user()
@@ -887,7 +891,7 @@ async def invite_teacher_get() -> AsyncIterator[str]:
 async def invite_teacher_post() -> AsyncIterator[str] | WKResponse:
     """Invite teacher form post handling."""
     assert current_user.auth_id is not None
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
     creator_username = get_login_from_cookie_data(current_user.auth_id)
 
     if creator_username is None or creator_username not in users:
@@ -928,7 +932,7 @@ async def invite_teacher_post() -> AsyncIterator[str] | WKResponse:
             request.url,
         )
 
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
 
     if (
         new_account_username in users
@@ -977,7 +981,7 @@ async def invite_manager_get() -> AsyncIterator[str]:
 async def invite_manager_post() -> AsyncIterator[str] | WKResponse:
     """Invite manager form post handling."""
     assert current_user.auth_id is not None
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
     creator_username = get_login_from_cookie_data(current_user.auth_id)
 
     if creator_username is None or creator_username not in users:
@@ -1018,7 +1022,7 @@ async def invite_manager_post() -> AsyncIterator[str] | WKResponse:
             request.url,
         )
 
-    users = database.load(app.root_path / "records" / "users.json")
+    users = database.load(Path(app.root_path) / "records" / "users.json")
 
     if (
         new_account_username in users
@@ -1065,7 +1069,7 @@ async def ticket_count_page(username: str) -> AsyncIterator[str]:
     user_type = None
 
     if current_user.auth_id is not None:
-        users = database.load(app.root_path / "records" / "users.json")
+        users = database.load(Path(app.root_path) / "records" / "users.json")
         logged_in_username = get_login_from_cookie_data(current_user.auth_id)
 
         if logged_in_username is not None and logged_in_username in users:
@@ -1131,10 +1135,12 @@ async def tickets_post() -> AsyncIterator[str]:
 @app.get("/")
 async def root_get() -> AsyncIterator[str] | WKResponse:
     """Main page GET request."""
+    print(f"{current_user = }")
+
     user_name = ""
     user_type = ""
     if await current_user.is_authenticated:
-        users = database.load(app.root_path / "records" / "users.json")
+        users = database.load(Path(app.root_path) / "records" / "users.json")
         assert current_user.auth_id is not None
         loaded_user = get_login_from_cookie_data(current_user.auth_id)
 
