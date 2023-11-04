@@ -104,7 +104,6 @@ app: Final = QuartTrio(
     static_folder="static",
     template_folder="templates",
 )  # pylint: disable=invalid-name
-QuartAuth(app)
 
 
 # Attributes users might have and what they do:
@@ -635,7 +634,7 @@ async def login_post() -> AsyncIterator[str] | WKResponse:
     user = AuthUser(create_login_cookie_data(username))
     login_user(user)
     logging.info(f"User {username!r} logged in")
-    print(f"{current_user = }")
+    # print(f"{current_user = }")
 
     return app.redirect("/")
 
@@ -1134,7 +1133,7 @@ async def tickets_post() -> AsyncIterator[str]:
 @app.get("/")
 async def root_get() -> AsyncIterator[str] | WKResponse:
     """Main page GET request."""
-    print(f"{current_user = }")
+    # print(f"{current_user = }")
 
     user_name = ""
     user_type = ""
@@ -1210,6 +1209,8 @@ async def run_async(
         app.secret_key = cookie_secret
 
         config_obj = Config.from_mapping(config)
+
+        QuartAuth(app)
 
         proto = "http" if not DOMAIN else "https"
         print(f"Serving on {proto}://{location}\n(CTRL + C to quit)")
