@@ -304,6 +304,7 @@ def form(
     ------
         TypeError: If `form_id`, `contents`, or `submit_display` are not
             strings.
+    
     """
     submit = input_field(
         f"{form_id}_submit_button",

@@ -1,6 +1,5 @@
 """Server - Caught In the Act Server."""
 
-
 __title__ = "Caught In the Act Server"
 __author__ = "CSHS Members"
 __version__ = "0.0.0"
@@ -1193,9 +1192,9 @@ async def run_async(
             "worker_class": "trio",
         }
         if DOMAIN:
-            config[
-                "certfile"
-            ] = f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
+            config["certfile"] = (
+                f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
+            )
             config["keyfile"] = f"/etc/letsencrypt/live/{DOMAIN}/privkey.pem"
         else:
             app.config["QUART_AUTH_COOKIE_SECURE"] = False

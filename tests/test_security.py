@@ -1,6 +1,5 @@
 """Test security module."""
 
-
 import random
 import secrets
 from collections.abc import Callable
