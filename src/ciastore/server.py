@@ -12,13 +12,13 @@ import sys
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
+from logging.handlers import TimedRotatingFileHandler
 from os import getenv, makedirs, path
 from pathlib import Path
 from typing import (
-    Any,
     Final,
+    ParamSpec,
     TypeVar,
-    cast,
 )
 from urllib.parse import urlencode
 
@@ -55,7 +55,7 @@ if not path.exists(path.dirname(CURRENT_LOG)):
 
 logging.basicConfig(format=FORMAT, level=logging.DEBUG, force=True)
 logging.getLogger().addHandler(
-    logging.handlers.TimedRotatingFileHandler(
+    TimedRotatingFileHandler(
         CURRENT_LOG,
         when="D",
         backupCount=60,
@@ -69,8 +69,12 @@ load_dotenv()
 PEPPER: Final = getenv("COOKIE_SECRET", "")
 
 
+P = ParamSpec("P")
+T = TypeVar("T")
+
+
 # Stolen from WOOF (Web Offer One File), Copyright (C) 2004-2009 Simon Budig,
-# avalable at http://www.home.unix-ag.org/simon/woof
+# available at http://www.home.unix-ag.org/simon/woof
 # with modifications
 
 # Utility function to guess the IP (as a string) where the server can be
@@ -140,26 +144,17 @@ def get_user_by(**kwargs: str) -> set[str]:
     return result
 
 
-Handler = TypeVar(
-    "Handler",
-    bound=Callable[
-        ...,
-        Awaitable[AsyncIterator[str]],
-    ],
-)
-
-
 def login_require_only(
     **attrs: str | set[str],
-) -> Callable[[Handler], Handler]:
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
     """Require login and some attribute match."""
 
-    def get_wrapper(function: Handler) -> Handler:
+    def get_wrapper(function: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
         """Get handler wrapper."""
 
         @login_required
         @functools.wraps(function)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             """Make sure current user matches attributes."""
             if current_user.auth_id is None:
                 raise Unauthorized()
@@ -171,25 +166,21 @@ def login_require_only(
 
             if username is None or username not in users:
                 logging.error(
-                    f"Invalid login UUID {current_user.auth_id} "
-                    "in authenticated user",
+                    f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
                 )
                 logout_user()
                 raise Unauthorized()
 
             user = users[username]
             for raw_key, raw_value in attrs.items():
-                if isinstance(raw_value, str):
-                    value = {raw_value}
-                else:
-                    value = raw_value
+                value = {raw_value} if isinstance(raw_value, str) else raw_value
                 key = raw_key.removesuffix("_")
                 if user.get(key) not in value:
                     raise Unauthorized()
 
             return await function(*args, **kwargs)
 
-        return cast(Handler, wrapper)
+        return wrapper
 
     return get_wrapper
 
@@ -208,14 +199,15 @@ async def send_error(
     )
 
 
-async def get_exception_page(code: int, name: str, desc: str) -> Response:
+async def get_exception_page(
+    code: int, name: str, desc: str
+) -> tuple[AsyncIterator[str], int]:
     """Return Response for exception."""
     resp_body = await send_error(
         page_title=f"{code} {name}",
         error_body=desc,
     )
-    # Response body can be AsyncIterator, type var is not correct
-    return Response(resp_body, status=code)  # type: ignore[type-var]
+    return (resp_body, code)
 
 
 def pretty_exception_name(exc: BaseException) -> str:
@@ -235,11 +227,11 @@ def pretty_exception_name(exc: BaseException) -> str:
     return " ".join(w for w in words if w not in {"Error", "Exception"})
 
 
-def pretty_exception(function: Handler) -> Handler:
+def pretty_exception(function: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T | tuple[AsyncIterator[str], int]]]:
     """Make exception pages pretty."""
 
     @functools.wraps(function)
-    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T | tuple[AsyncIterator[str], int]:
         code = None
         name = "Exception"
         desc = None
@@ -267,11 +259,11 @@ def pretty_exception(function: Handler) -> Handler:
             desc,
         )
 
-    return cast(Handler, wrapper)
+    return wrapper
 
 
 def create_login_cookie_data(username: str) -> str:
-    """Generate UUID accociated with a specific user.
+    """Generate UUID associated with a specific user.
 
     Only one instance of an account should be able
     to log in at any given time, subsequent will invalidate older
@@ -317,7 +309,9 @@ def get_login_from_cookie_data(code: str) -> str | None:
         logins.write_file()
         return None
     # Otherwise attempt to return username field or is bad because malformed
-    return entry.get("user", None)
+    value = entry.get("user", None)
+    assert isinstance(value, str) or value is None
+    return value
 
 
 def create_uninitialized_account(
@@ -357,7 +351,7 @@ async def add_tickets_to_user(username: str, count: int) -> None:
 
     records[username]["tickets"] = current_tickets + count
     await records.async_write_file()
-    logging.info(f"User {username!r} recieved {count!r} ticket(s)")
+    logging.info(f"User {username!r} received {count!r} ticket(s)")
 
 
 def get_user_ticket_count(username: str) -> int:
@@ -771,8 +765,7 @@ async def subtract_tickets_post() -> AsyncIterator[str]:
         # Count > number of tickets in account
         return await send_error(
             "Not Enough Tickets Error",
-            "Student does not have enough tickets for the requested "
-            + "transaction",
+            "Student does not have enough tickets for the requested " + "transaction",
             request.url,
         )
 
@@ -819,8 +812,7 @@ async def settings_password_post() -> AsyncIterator[str] | WKResponse:
 
     if username is None or username not in users:
         logging.error(
-            f"Invalid login UUID {current_user.auth_id} "
-            "in authenticated user",
+            f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
         )
         logout_user()
         return app.redirect("login")
@@ -894,8 +886,7 @@ async def invite_teacher_post() -> AsyncIterator[str] | WKResponse:
 
     if creator_username is None or creator_username not in users:
         logging.error(
-            f"Invalid login UUID {current_user.auth_id} "
-            "in authenticated user",
+            f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
         )
         logout_user()
         return app.redirect("login")
@@ -908,16 +899,14 @@ async def invite_teacher_post() -> AsyncIterator[str] | WKResponse:
     if not new_account_username:
         return await send_error(
             "Invite User Error",
-            "New account username must be between 3 and 16 characters long "
-            + "and cannot contain special characters",
+            "New account username must be between 3 and 16 characters long " + "and cannot contain special characters",
             request.url,
         )
     length = len(new_account_username)
     if length < 3 or length > 16:
         return await send_error(
             "Invite User Error",
-            "New account username must be between 3 and 16 characters long "
-            + "and cannot contain special characters",
+            "New account username must be between 3 and 16 characters long " + "and cannot contain special characters",
             request.url,
         )
 
@@ -925,17 +914,13 @@ async def invite_teacher_post() -> AsyncIterator[str] | WKResponse:
     if bool(set(new_account_username) - possible_name):
         return await send_error(
             "Invite User Error",
-            "New account username must be between 3 and 16 characters long "
-            + "and cannot contain special characters",
+            "New account username must be between 3 and 16 characters long " + "and cannot contain special characters",
             request.url,
         )
 
     users = database.load(Path(app.root_path) / "records" / "users.json")
 
-    if (
-        new_account_username in users
-        and users[new_account_username]["status"] != "created_auto_password"
-    ):
+    if new_account_username in users and users[new_account_username]["status"] != "created_auto_password":
         return await send_error(
             "Invite User Error",
             "An account with the requested username already exists",
@@ -984,8 +969,7 @@ async def invite_manager_post() -> AsyncIterator[str] | WKResponse:
 
     if creator_username is None or creator_username not in users:
         logging.error(
-            f"Invalid login UUID {current_user.auth_id} "
-            "in authenticated user",
+            f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
         )
         logout_user()
         return app.redirect("login")
@@ -998,16 +982,14 @@ async def invite_manager_post() -> AsyncIterator[str] | WKResponse:
     if not new_account_username:
         return await send_error(
             "Invite User Error",
-            "New account username must be between 3 and 16 characters long "
-            + "and cannot contain special characters",
+            "New account username must be between 3 and 16 characters long " + "and cannot contain special characters",
             request.url,
         )
     length = len(new_account_username)
     if length < 3 or length > 16:
         return await send_error(
             "Invite User Error",
-            "New account username must be between 3 and 16 characters long "
-            + "and cannot contain special characters",
+            "New account username must be between 3 and 16 characters long " + "and cannot contain special characters",
             request.url,
         )
 
@@ -1015,17 +997,13 @@ async def invite_manager_post() -> AsyncIterator[str] | WKResponse:
     if bool(set(new_account_username) - possible_name):
         return await send_error(
             "Invite User Error",
-            "New account username must be between 3 and 16 characters long "
-            + "and cannot contain special characters",
+            "New account username must be between 3 and 16 characters long " + "and cannot contain special characters",
             request.url,
         )
 
     users = database.load(Path(app.root_path) / "records" / "users.json")
 
-    if (
-        new_account_username in users
-        and users[new_account_username]["status"] != "created_auto_password"
-    ):
+    if new_account_username in users and users[new_account_username]["status"] != "created_auto_password":
         return await send_error(
             "Invite User Error",
             "An account with the requested username already exists",
@@ -1144,8 +1122,7 @@ async def root_get() -> AsyncIterator[str] | WKResponse:
 
         if loaded_user is None or loaded_user not in users:
             logging.error(
-                f"Invalid login UUID {current_user.auth_id} "
-                "in authenticated user",
+                f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
             )
             logout_user()
             return app.redirect("login")
@@ -1191,9 +1168,7 @@ async def run_async(
             "worker_class": "trio",
         }
         if DOMAIN:
-            config["certfile"] = (
-                f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
-            )
+            config["certfile"] = f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"
             config["keyfile"] = f"/etc/letsencrypt/live/{DOMAIN}/privkey.pem"
         else:
             app.config["QUART_AUTH_COOKIE_SECURE"] = False

@@ -50,8 +50,7 @@ def get_hash(hash_name: str, value: str) -> str:
     """Get hash of value using hash name function."""
     if hash_name not in _HASH_FUNCTIONS:
         raise ValueError(
-            f'No function named "{hash_name}" has '
-            + "the @hash_function decorator",
+            f'No function named "{hash_name}" has ' + "the @hash_function decorator",
         )
     return _HASH_FUNCTIONS[hash_name](value)
 
@@ -97,7 +96,7 @@ def get_password_hash_for_compare(
         salt = rest.split("$", 1)[0]
         return database_value, hash_login(password, salt, hash_name, pepper)
     raise ValueError(
-        f"Exaustive list of hash_name exausted, got unhandled {hash_name!r}",
+        f"Exhaustive list of hash_name exhausted, got unhandled {hash_name!r}",
     )
 
 

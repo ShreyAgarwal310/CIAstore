@@ -11,11 +11,11 @@ def test_indent_single() -> None:
 
 
 def test_indent_lines() -> None:
-    assert htmlgen.indent(4, "cat\npotatoe") == "    cat\n    potatoe"
+    assert htmlgen.indent(4, "cat\npotato") == "    cat\n    potato"
 
 
 def test_indent_lines_indent_two() -> None:
-    assert htmlgen.indent(2, "cat\npotatoe") == "  cat\n  potatoe"
+    assert htmlgen.indent(2, "cat\npotato") == "  cat\n  potato"
 
 
 def test_deindent_single() -> None:
@@ -27,11 +27,11 @@ def test_deindent_single_only_four() -> None:
 
 
 def test_deindent_lines() -> None:
-    assert htmlgen.deindent(4, "    cat\n    potatoe") == "cat\npotatoe"
+    assert htmlgen.deindent(4, "    cat\n    potato") == "cat\npotato"
 
 
 def test_deindent_lines_level_seven() -> None:
-    assert htmlgen.deindent(7, "       cat\n       potatoe") == "cat\npotatoe"
+    assert htmlgen.deindent(7, "       cat\n       potato") == "cat\npotato"
 
 
 def test_css_style() -> None:
@@ -46,23 +46,15 @@ def test_css_block() -> None:
 
 
 def test_css_multi_select() -> None:
-    assert (
-        htmlgen.css_block(("*", "*::"), "content") == "*, *:: {\n  content\n}"
-    )
+    assert htmlgen.css_block(("*", "*::"), "content") == "*, *:: {\n  content\n}"
 
 
 def test_css() -> None:
-    assert (
-        htmlgen.css(("h1", "footer"), text_align="center")
-        == "h1, footer {\n  text-align: center;\n}"
-    )
+    assert htmlgen.css(("h1", "footer"), text_align="center") == "h1, footer {\n  text-align: center;\n}"
 
 
 def test_css_multi() -> None:
-    assert (
-        htmlgen.css(("h1", "footer"), text_align=("center", "left"))
-        == "h1, footer {\n  text-align: center left;\n}"
-    )
+    assert htmlgen.css(("h1", "footer"), text_align=("center", "left")) == "h1, footer {\n  text-align: center left;\n}"
 
 
 @pytest.mark.parametrize(
@@ -117,15 +109,12 @@ this is comment
 
 
 def test_wrap_comment_inline() -> None:
-    assert (
-        htmlgen.wrap_comment("smol comment", inline=True)
-        == "<!--smol comment-->"
-    )
+    assert htmlgen.wrap_comment("smol comment", inline=True) == "<!--smol comment-->"
 
 
 def test_wrap_comment_avoid_hacks() -> None:
     with pytest.raises(ValueError, match="Attempted comment escape"):
-        htmlgen.wrap_comment("-->haha now javascript hax you", inline=True)
+        htmlgen.wrap_comment("-->haha now javascript hacks you", inline=True)
 
 
 def test_template() -> None:
@@ -298,10 +287,7 @@ def test_bullet_list() -> None:
 
 
 def test_create_link() -> None:
-    assert (
-        htmlgen.create_link("/ref", "title of lonk")
-        == '<a href="/ref">title of lonk</a>'
-    )
+    assert htmlgen.create_link("/ref", "title of lonk") == '<a href="/ref">title of lonk</a>'
 
 
 def test_link_list() -> None:

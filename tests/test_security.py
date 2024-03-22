@@ -42,10 +42,7 @@ def test_get_hash_bad_funcname() -> None:
 
 
 def test_sha3_256() -> None:
-    assert (
-        security.sha3_256("cat")
-        == "1hZgfT5LqWp08yPP/F8go8eOfKuOy9uwOxP6j/yb9kQ="
-    )
+    assert security.sha3_256("cat") == "1hZgfT5LqWp08yPP/F8go8eOfKuOy9uwOxP6j/yb9kQ="
 
 
 def test_hash_login_sha3_256() -> None:
@@ -61,10 +58,7 @@ def test_hash_login_sha3_256() -> None:
 
 
 def test_generate_salt() -> None:
-    assert (
-        security.generate_salt()
-        == "uX9p917fNccf2tNwZurpHRT26gFFazQXcLg16UL1SfE"
-    )
+    assert security.generate_salt() == "uX9p917fNccf2tNwZurpHRT26gFFazQXcLg16UL1SfE"
 
 
 def test_create_new_login_credentials() -> None:
@@ -77,7 +71,7 @@ def test_create_new_login_credentials() -> None:
 def test_get_password_hash_for_compare_bad_funcname() -> None:
     with pytest.raises(
         ValueError,
-        match="Exaustive list of hash_name exausted, got unhandled 'fish_64'",
+        match="Exhaustive list of hash_name exhausted, got unhandled 'fish_64'",
     ):
         security.get_password_hash_for_compare(
             "fish",
@@ -88,12 +82,12 @@ def test_get_password_hash_for_compare_bad_funcname() -> None:
 
 def test_get_password_hash_for_compare_diff_pepper() -> None:
     assert security.get_password_hash_for_compare(
-        "tomatoe",
+        "tomato",
         "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$eA5A53S/Kl11r7a9Q9YzjBVUDuh4i4Nn0cNl282+Xts=",
         "peppers",
     ) == (
         "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$eA5A53S/Kl11r7a9Q9YzjBVUDuh4i4Nn0cNl282+Xts=",
-        "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$mGANFDjF5pf0fkwOytge5VIyitZFJdFE980TMqgcN/E=",
+        "sha3_256$GqpVN8aXBHRspMd04vIsOm4P-6UNixCHdUiqblydVpo$QuNHWvhiupy/eSdtwNuyKWtUj38Cpo15Z3O/Uj0hOBU=",
     )
 
 
@@ -110,12 +104,12 @@ def test_get_password_hash_for_compare_diff() -> None:
 
 def test_get_password_hash_for_compare_same_pepper() -> None:
     assert security.get_password_hash_for_compare(
-        "tomatoe",
+        "tomato",
         "sha3_256$vNZOW3uyTIVUaRSXI7q7QGi_3h1mg0VKzjVD0zmAedk$8kGVye+TgVSqvqoRL9hJfRU3+79vefcZb8rppT/LBz4=",
         "peppers",
     ) == (
         "sha3_256$vNZOW3uyTIVUaRSXI7q7QGi_3h1mg0VKzjVD0zmAedk$8kGVye+TgVSqvqoRL9hJfRU3+79vefcZb8rppT/LBz4=",
-        "sha3_256$vNZOW3uyTIVUaRSXI7q7QGi_3h1mg0VKzjVD0zmAedk$8kGVye+TgVSqvqoRL9hJfRU3+79vefcZb8rppT/LBz4=",
+        "sha3_256$vNZOW3uyTIVUaRSXI7q7QGi_3h1mg0VKzjVD0zmAedk$EeaQnWq3n4MNR+zOiygLKsj32kyjwu8C64vWNK94q7o=",
     )
 
 

@@ -16,6 +16,7 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3 :: Only",
     "Operating System :: OS Independent",
     "Typing :: Typed",
@@ -65,33 +66,28 @@ warn_unreachable = true
 warn_unused_configs = true
 warn_unused_ignores = true
 
-[tool.black]
-line-length = 79
-target-version = ['py311']
-
-[tool.isort]
-profile = "black"
-combine_as_imports = true
-line_length = 79
-skip = [".git", ".github", ".venv"]
-
 [tool.ruff.isort]
 combine-as-imports = true
 
-[tool.ruff.per-file-ignores]
-"tests/*" = ["D103"]
+[tool.pycln]
+all = true
+disable_all_dunder_policy = true
+
+[tool.black]
+line-length = 120  # Will not raise errors if too big, see below.
+target-version = ['py310']
 
 [tool.ruff]
-line-length = 79
+line-length = 120  # I don't care about line length a whole lot, just that it's not TOO big.
 fix = true
 
 include = ["*.py", "*.pyi", "**/pyproject.toml"]
 
-select = ['A', 'B', 'C4', 'COM', 'CPY', 'D', 'E', 'EXE', 'F', 'FA', 'I', 'N', 'PIE', 'PT', 'PYI', 'Q', 'RET', 'RUF', 'S', 'SIM', 'SLOT', 'UP', 'YTT']
+select = ['A', 'B', 'C4', 'COM', 'D', 'E', 'EXE', 'F', 'FA', 'I', 'N', 'PIE', 'PT', 'PYI', 'Q', 'RET', 'RUF', 'S', 'SIM', 'SLOT', 'UP', 'YTT']
 ignore = [
     "D211",  # conflicts with docstrings
     "D213",  # conflicts with docstrings
-    "E203",  # conflicts with black
+##    "E203",  # conflicts with black
     "E501",  # conflicts with black
     "S101",  # use of assert for tests and type narrowing
 ##    "E402",  # module level import not at top of file
@@ -103,47 +99,22 @@ ignore = [
 fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
 unfixable = []#"D203"]
 
-# Exclude a variety of commonly ignored directories.
-exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".git-rewrite",
-    ".hg",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "venv",
+[tool.ruff.per-file-ignores]
+"tests/*" = [
+    "D103",  # no docstrings
 ]
-
-# Allow unused variables when underscore-prefixed.
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-
-[tool.ruff.mccabe]
-max-complexity = 10
 
 [tool.tox]
 legacy_tox_ini = """
     [tox]
-    minversion = 3.11.0
-    envlist = py311, mypy, pytest
+    envlist = py310, py311, py312, pytest, mypy
     isolated_build = false
 
     [gh-actions]
     python =
-        3.11: py310, mypy, pytest
+        3.10: py310, pytest
+        3.11: py311, pytest
+        3.12: py312, pytest, mypy
 
     [testenv]
     setenv =

@@ -42,7 +42,7 @@ class Database(dict[str, Any]):
 
 
 class Table:
-    """Table from dictonary.
+    """Table from dictionary.
 
     Allows getting and setting entire columns of a database
     """
@@ -63,10 +63,7 @@ class Table:
             for value in self[column]:
                 if value is None:
                     continue
-                if hasattr(value, "__len__"):
-                    length = len(value)
-                else:
-                    length = len(repr(value))
+                length = len(value) if hasattr(value, "__len__") else len(repr(value))
                 size[column] = max(size[column], length)
         num_pad = len(str(len(self)))
         lines = []

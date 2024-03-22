@@ -1,4 +1,4 @@
-"""Test elasped."""
+"""Test elapsed."""
 
 import pytest
 from ciastore import elapsed
@@ -24,10 +24,7 @@ def test_split_time() -> None:
 
 
 def test_combine_end() -> None:
-    assert (
-        elapsed.combine_end(("Cat", "fish", "potatoe"))
-        == "Cat, fish, and potatoe"
-    )
+    assert elapsed.combine_end(("Cat", "fish", "potato")) == "Cat, fish, and potato"
 
 
 def test_combine_end_two() -> None:
@@ -35,10 +32,7 @@ def test_combine_end_two() -> None:
 
 
 def test_combine_end_diff_final() -> None:
-    assert (
-        elapsed.combine_end(("one", "two", "tree"), "or")
-        == "one, two, or tree"
-    )
+    assert elapsed.combine_end(("one", "two", "tree"), "or") == "one, two, or tree"
 
 
 def test_get_elapsed() -> None:

@@ -1,4 +1,4 @@
-"""Backups - Preform periodic backups of all records."""
+"""Backups - Perform periodic backups of all records."""
 
 # Programmed by CoolCat467
 
@@ -101,7 +101,7 @@ async def backup_csv() -> None:
 
 async def backup() -> None:
     """Backup all records."""
-    logging.info("Preforming backup")
+    logging.info("Performing backup")
     await backup_database()
     await backup_csv()
     logging.info("Backup complete")

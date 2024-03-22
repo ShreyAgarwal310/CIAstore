@@ -1,12 +1,18 @@
 # CIAstore
 
 [![Tests](https://github.com/ShreyAgarwal310/CIAstore/actions/workflows/tests.yml/badge.svg)](https://github.com/ShreyAgarwal310/CIAstore/actions/workflows/tests.yml)
+<!-- BADGIE TIME -->
+
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+[![code style: black](https://img.shields.io/badge/code_style-black-000000.svg)](https://github.com/psf/black)
+
+<!-- END BADGIE TIME -->
 
 Caught In the Act Store website project
 
 Created by members of Computer Science Honors Society
 
-Project requires Python 3.10 at a minimum to run, but 3.11 prefered
+Project requires Python 3.10 at a minimum to run, but 3.11 preferred
 
 How to run:
 

@@ -75,16 +75,6 @@ def generate_style_css() -> str:
     return "\n".join(
         (
             htmlgen.css(
-                "@font-face",
-                font_family="Nunito Sans",
-                src="NunitoSans-Regular.ttf",
-            ),
-            htmlgen.css(
-                "@font-face",
-                font_family="Tilt Warp",
-                src="TiltWarp-Regular.ttf",
-            ),
-            htmlgen.css(
                 ("*", "*::before", "*::after"),
                 box_sizing="border-box",
                 margin=0,
@@ -237,8 +227,7 @@ def template(
                         # Maybe remove in the future, but kind of funny
                         htmlgen.wrap_tag(
                             "i",
-                            "If you're reading this, the web server "
-                            "was installed correctly.™",
+                            "If you're reading this, the web server " "was installed correctly.™",
                             block=False,
                         ),
                         htmlgen.tag("hr"),
@@ -341,10 +330,7 @@ def generate_signup_get() -> str:
 @save_template_as("signup_post")
 def generate_signup_post() -> str:
     """Generate /signup post page."""
-    text = (
-        "Sent an email to {{ email }} containing "
-        + "your a link to verify your account."
-    )
+    text = "Sent an email to {{ email }} containing " + "your a link to verify your account."
     body = htmlgen.wrap_tag("p", text, False)
     return template("Check your email", body)
 
@@ -431,8 +417,7 @@ def generate_add_tickets_post() -> str:
             htmlgen.contain_in_box(
                 htmlgen.wrap_tag(
                     "p",
-                    "Added {{ ticket_count }} ticket{{ plural }} "
-                    + "for {{ student_id }}",
+                    "Added {{ ticket_count }} ticket{{ plural }} " + "for {{ student_id }}",
                     block=False,
                 ),
             ),
