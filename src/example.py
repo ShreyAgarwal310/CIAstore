@@ -10,7 +10,6 @@ from typing import Final
 import trio
 from hypercorn.config import Config
 from hypercorn.trio import serve
-from quart import Response
 from quart.templating import stream_template
 from quart_trio import QuartTrio
 
@@ -45,7 +44,7 @@ async def get_exception_page(code: int, name: str, desc: str) -> tuple[AsyncIter
 
 @app.get("/")
 async def root_get() -> tuple[AsyncIterator[str], int]:
-    """Main page GET request."""
+    """Handle main page GET request."""
     return await get_exception_page(404, "Page not found", "Requested content does not exist.")
 
 
@@ -54,7 +53,7 @@ async def run_async(
     port: int,
 ) -> None:
     """Asynchronous Entry Point."""
-    ip_addr = "0.0.0.0"
+    ip_addr = "127.0.0.1"
 
     try:
         # Add more information about the address
@@ -85,7 +84,7 @@ async def run_async(
 
 
 def run() -> None:
-    """Synchronous Entry Point."""
+    """Handle synchronous entry point."""
     root_dir = path.dirname(__file__)
     port = 6002
 

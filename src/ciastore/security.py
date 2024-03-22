@@ -35,7 +35,7 @@ def hash_function(func: Callable[[bytes], bytes]) -> Callable[[str], str]:
 
     @wraps(func, assign, updated=update)
     def wrapped(string: str) -> str:
-        """Wrapped hash function."""
+        """Return base64 encode of hashed version of given string."""
         bytes_ = func(string.encode("utf-8"))
         return base64.b64encode(bytes_).decode("utf-8")
 

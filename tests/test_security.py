@@ -2,16 +2,19 @@
 
 import random
 import secrets
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import pytest
 from ciastore import security
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @pytest.fixture(autouse=True)
 def _no_random(monkeypatch: pytest.MonkeyPatch) -> None:
     """Replace secrets sysrand with new Random object with seed 1234."""
-    monkeypatch.setattr(secrets, "_sysrand", random.Random(1234))
+    monkeypatch.setattr(secrets, "_sysrand", random.Random(1234))  # noqa: S311
 
 
 def test_hash_function(monkeypatch: pytest.MonkeyPatch) -> None:

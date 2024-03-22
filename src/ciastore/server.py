@@ -26,7 +26,7 @@ import trio
 from dotenv import load_dotenv
 from hypercorn.config import Config
 from hypercorn.trio import serve
-from quart import Response, request
+from quart import request
 from quart.templating import stream_template
 from quart_auth import (
     AuthUser,
@@ -199,9 +199,7 @@ async def send_error(
     )
 
 
-async def get_exception_page(
-    code: int, name: str, desc: str
-) -> tuple[AsyncIterator[str], int]:
+async def get_exception_page(code: int, name: str, desc: str) -> tuple[AsyncIterator[str], int]:
     """Return Response for exception."""
     resp_body = await send_error(
         page_title=f"{code} {name}",
@@ -785,7 +783,7 @@ async def subtract_tickets_post() -> AsyncIterator[str]:
 @pretty_exception
 @login_required
 async def settings_get() -> AsyncIterator[str]:
-    """Settings page get request."""
+    """Handle settings page get request."""
     return await stream_template(
         "settings_get.html.jinja",
     )
@@ -795,7 +793,7 @@ async def settings_get() -> AsyncIterator[str]:
 @pretty_exception
 @login_required
 async def settings_change_password_get() -> AsyncIterator[str]:
-    """Setting page for password change get."""
+    """Handle setting page for password change get."""
     return await stream_template(
         "settings_change_password_get.html.jinja",
     )
@@ -1110,7 +1108,7 @@ async def tickets_post() -> AsyncIterator[str]:
 
 @app.get("/")
 async def root_get() -> AsyncIterator[str] | WKResponse:
-    """Main page GET request."""
+    """Handle main page GET request."""
     # print(f"{current_user = }")
 
     user_name = ""
@@ -1199,7 +1197,7 @@ async def run_async(
 
 
 def run() -> None:
-    """Synchronous Entry Point."""
+    """Handle synchronous entry point."""
     root_dir = path.dirname(__file__)
     port = 6002
 
