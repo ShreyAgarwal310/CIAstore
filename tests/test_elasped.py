@@ -1,6 +1,7 @@
 """Test elapsed."""
 
 import pytest
+
 from ciastore import elapsed
 
 
