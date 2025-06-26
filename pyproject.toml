@@ -23,7 +23,7 @@ classifiers = [
 ]
 keywords = ["server"]
 dependencies = [
-    "hypercorn[trio]~=0.15.0",
+    "hypercorn[trio]~=0.17.3",
     "python-dotenv~=1.0.0",
     "quart~=0.19.3",
     "quart-auth~=0.10.1",
