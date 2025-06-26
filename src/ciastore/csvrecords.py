@@ -42,7 +42,7 @@ def _escape(raw_value: object) -> str:
 class CSVRecords(dict[str, dict[str, str | int]]):
     """Records dict with CSV file read write functions."""
 
-    __slots__ = ("file", "key_name", "__weakref__", "_lock")
+    __slots__ = ("__weakref__", "_lock", "file", "key_name")
 
     def __init__(
         self,
