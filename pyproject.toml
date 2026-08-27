@@ -176,7 +176,9 @@ legacy_tox_ini = """
     python =
         3.10: py310, pytest, mypy
         3.11: py311, pytest
-        3.12: py312, pytest, mypy
+        3.12: py312, pytest
+        3.13: py312, pytest
+        3.14: py312, pytest, mypy
 
     [testenv]
     setenv =
