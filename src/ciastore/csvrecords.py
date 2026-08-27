@@ -131,13 +131,14 @@ def get_loaded() -> set[str]:
 
 async def unload(file_path: str | Path | trio.Path) -> None:
     """If database loaded, write file and unload."""
-    file = path.abspath(file_path)
-    if file not in get_loaded():
+    file = await trio.Path(file_path).absolute()
+    str_file = str(file)
+    if str_file not in get_loaded():
         return
     # must be loaded then so None is fine
     database = load(file, None)
     await database.async_write_file()
-    del _LOADED[file]
+    del _LOADED[str_file]
 
 
 async def unload_all() -> None:

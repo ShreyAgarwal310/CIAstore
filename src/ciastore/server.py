@@ -166,7 +166,7 @@ def login_require_only(
 
             if username is None or username not in users:
                 logging.error(
-                    f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
+                    f"Invalid login UUID {current_user.auth_id} in authenticated user",
                 )
                 logout_user()
                 raise Unauthorized()
@@ -400,7 +400,7 @@ async def subtract_user_tickets(username: str, count: int) -> int:
 
     if new < 0:
         raise ValueError(
-            f"Insufficiant tickets for user {username!r} to subtract {count}",
+            f"Insufficient tickets for user {username!r} to subtract {count}",
         )
     records[username]["tickets"] = new
     if new == 0:  # Maybe free up a bit of memory then, since default is zero
@@ -810,7 +810,7 @@ async def settings_password_post() -> AsyncIterator[str] | WKResponse:
 
     if username is None or username not in users:
         logging.error(
-            f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
+            f"Invalid login UUID {current_user.auth_id} in authenticated user",
         )
         logout_user()
         return app.redirect("login")
@@ -884,7 +884,7 @@ async def invite_teacher_post() -> AsyncIterator[str] | WKResponse:
 
     if creator_username is None or creator_username not in users:
         logging.error(
-            f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
+            f"Invalid login UUID {current_user.auth_id} in authenticated user",
         )
         logout_user()
         return app.redirect("login")
@@ -967,7 +967,7 @@ async def invite_manager_post() -> AsyncIterator[str] | WKResponse:
 
     if creator_username is None or creator_username not in users:
         logging.error(
-            f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
+            f"Invalid login UUID {current_user.auth_id} in authenticated user",
         )
         logout_user()
         return app.redirect("login")
@@ -1067,7 +1067,7 @@ async def ticket_count_page(username: str) -> AsyncIterator[str]:
 
 @app.get("/tickets")
 @pretty_exception
-async def tickets_get() -> AsyncIterator[str]:
+async def tickets_get() -> AsyncIterator[str] | tuple[AsyncIterator[str], int]:
     """Tickets view page."""
     # Get username from request arguments if it exists
     username = request.args.get("id", None)
@@ -1088,7 +1088,7 @@ async def tickets_get() -> AsyncIterator[str]:
 
 @app.post("/tickets")
 @pretty_exception
-async def tickets_post() -> AsyncIterator[str]:
+async def tickets_post() -> AsyncIterator[str] | tuple[AsyncIterator[str], int]:
     """Invite teacher form post handling."""
     multi_dict = await request.form
     response = multi_dict.to_dict()
@@ -1120,7 +1120,7 @@ async def root_get() -> AsyncIterator[str] | WKResponse:
 
         if loaded_user is None or loaded_user not in users:
             logging.error(
-                f"Invalid login UUID {current_user.auth_id} " "in authenticated user",
+                f"Invalid login UUID {current_user.auth_id} in authenticated user",
             )
             logout_user()
             return app.redirect("login")

@@ -41,7 +41,15 @@ dependencies = [
 ciastore = ["py.typed", "templates/*", "static/*"]
 
 [tool.mypy]
-mypy_path = "src"
+files = [
+    "src/ciastore/",
+    "tests",
+]
+enable_error_code = [
+    "truthy-bool",
+    "mutable-override",
+    "exhaustive-match",
+]
 check_untyped_defs = true
 disallow_any_generics = true
 disallow_untyped_calls = true

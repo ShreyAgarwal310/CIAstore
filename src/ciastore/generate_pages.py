@@ -227,7 +227,7 @@ def template(
                         # Maybe remove in the future, but kind of funny
                         htmlgen.wrap_tag(
                             "i",
-                            "If you're reading this, the web server " "was installed correctly.™",
+                            "If you're reading this, the web server was installed correctly.™",
                             block=False,
                         ),
                         htmlgen.tag("hr"),
