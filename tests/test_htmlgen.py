@@ -101,12 +101,9 @@ def test_wrap_tag(
 
 
 def test_wrap_comment() -> None:
-    assert (
-        htmlgen.wrap_comment("this is comment")
-        == """<!--
+    assert htmlgen.wrap_comment("this is comment") == """<!--
 this is comment
 -->"""
-    )
 
 
 def test_wrap_comment_inline() -> None:
@@ -165,25 +162,19 @@ def test_template_no_tag() -> None:
 
 
 def test_contain_in_box_none() -> None:
-    assert (
-        htmlgen.contain_in_box("inside woo")
-        == """<div class="box">
+    assert htmlgen.contain_in_box("inside woo") == """<div class="box">
   inside woo
 </div>"""
-    )
 
 
 def test_contain_in_box_named() -> None:
-    assert (
-        htmlgen.contain_in_box("inside different", "Names here")
-        == """<div class="box">
+    assert htmlgen.contain_in_box("inside different", "Names here") == """<div class="box">
   <span>
     Names here
   </span>
   <br>
   inside different
 </div>"""
-    )
 
 
 def test_radio_select_dict() -> None:
@@ -235,19 +226,13 @@ def test_radio_select_box() -> None:
 
 
 def test_input_field_no_kwarg() -> None:
-    assert (
-        htmlgen.input_field("<id>", "woot")
-        == """<label for="<id>">woot</label>
+    assert htmlgen.input_field("<id>", "woot") == """<label for="<id>">woot</label>
 <input id="<id>" name="<id>">"""
-    )
 
 
 def test_input_field_with_type() -> None:
-    assert (
-        htmlgen.input_field("<id>", "woot", field_type="types woo")
-        == """<label for="<id>">woot</label>
+    assert htmlgen.input_field("<id>", "woot", field_type="types woo") == """<label for="<id>">woot</label>
 <input type="types woo" id="<id>" name="<id>">"""
-    )
 
 
 def test_input_field_attrs() -> None:
@@ -278,13 +263,10 @@ def test_input_field_exception() -> None:
 
 
 def test_bullet_list() -> None:
-    assert (
-        htmlgen.bullet_list(["one", "two"], flag="bean")
-        == """<ul flag="bean">
+    assert htmlgen.bullet_list(["one", "two"], flag="bean") == """<ul flag="bean">
   <li>one</li>
   <li>two</li>
 </ul>"""
-    )
 
 
 def test_create_link() -> None:
@@ -292,13 +274,10 @@ def test_create_link() -> None:
 
 
 def test_link_list() -> None:
-    assert (
-        htmlgen.link_list({"/cat-page": "Cat memes", "/home": "Home page"})
-        == """<ul>
+    assert htmlgen.link_list({"/cat-page": "Cat memes", "/home": "Home page"}) == """<ul>
   <li><a href="/cat-page">Cat memes</a></li>
   <li><a href="/home">Home page</a></li>
 </ul>"""
-    )
 
 
 def test_form() -> None:
@@ -319,14 +298,11 @@ def test_form() -> None:
 
 
 def test_form_no_title() -> None:
-    assert (
-        htmlgen.form("form_id", "dis content woo", "hihi")
-        == """<form name="form_id" method="post">
+    assert htmlgen.form("form_id", "dis content woo", "hihi") == """<form name="form_id" method="post">
   dis content woo
   <br>
   <input type="submit" id="form_id_submit_button" name="form_id_submit_button" value="hihi">
 </form>"""
-    )
 
 
 def test_jinja_statement() -> None:
@@ -464,14 +440,11 @@ def test_jinja_arg_tag(
 
 
 def test_jinja_radio_select() -> None:
-    assert (
-        htmlgen.jinja_radio_select("submits", "option_data")
-        == """{% for display, value in option_data.items() %}
+    assert htmlgen.jinja_radio_select("submits", "option_data") == """{% for display, value in option_data.items() %}
 <input type="radio" id="submits_{{ loop.index0 }}" name="submits" value="{{ value }}">
 <label for="submits_{{ loop.index0 }}">{{ display }}</label>
 <br>
 {% endfor %}"""
-    )
 
 
 def test_jinja_radio_select_default() -> None:
